@@ -1,3 +1,4 @@
 SHA256: 7d4dd01c6b55b826e435c322313dac0cfa1d1d87fede5899c0c439e0c12a7b8d
 Package: DaHuang-v1.0.0-Playable-Package.tar.gz
 App: 大荒 v1.0.0
+c0988df8bdc4f2cfb7f9e4568fce57406477d9679581a7895d6df1d4f0578c34  /opt/cc-haha/HongHuangGame/Releases/DaHuang-v1.0.0-Playable.apk
