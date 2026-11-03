@@ -1,0 +1,26 @@
+[
+  {
+    "id": "skill_01",
+    "name": "青木长生印",
+    "element": "Wood",
+    "multiplier": 1.25,
+    "cooldownSec": 3.0,
+    "tenacityDamage": 20
+  },
+  {
+    "id": "skill_02",
+    "name": "紫阳三昧火",
+    "element": "Fire",
+    "multiplier": 2.10,
+    "cooldownSec": 8.0,
+    "tenacityDamage": 45
+  },
+  {
+    "id": "skill_03",
+    "name": "九天都天大雷罚",
+    "element": "Metal",
+    "multiplier": 3.80,
+    "cooldownSec": 18.0,
+    "tenacityDamage": 80
+  }
+]

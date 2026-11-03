@@ -1,0 +1,32 @@
+[
+  {
+    "id": "char_001",
+    "name": "青莲道人 (主角)",
+    "realm": "LianQi",
+    "element": "Wood",
+    "baseHp": 1200,
+    "baseAtk": 180,
+    "baseDef": 90,
+    "critRate": 0.08
+  },
+  {
+    "id": "char_101",
+    "name": "赤火蝎首领",
+    "realm": "ZhuJi",
+    "element": "Fire",
+    "baseHp": 3500,
+    "baseAtk": 260,
+    "baseDef": 150,
+    "critRate": 0.05
+  },
+  {
+    "id": "char_201",
+    "name": "金翅大鹏分身",
+    "realm": "JinDan",
+    "element": "Metal",
+    "baseHp": 15000,
+    "baseAtk": 850,
+    "baseDef": 420,
+    "critRate": 0.15
+  }
+]

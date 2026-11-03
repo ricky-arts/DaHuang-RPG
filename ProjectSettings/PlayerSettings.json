@@ -1,0 +1,15 @@
+{
+  "productName": "大荒",
+  "companyName": "DaHuangStudio",
+  "bundleVersion": "1.0.0",
+  "bundleIdentifier": "com.honghuang.rpg",
+  "defaultInterfaceOrientation": "LandscapeLeft",
+  "targetArchitectures": ["ARM64", "ARMv7"],
+  "scriptingBackend": "IL2CPP",
+  "apiCompatibilityLevel": "NET_Standard_2_1",
+  "renderPipelineAsset": "URP-Mobile-Balanced",
+  "colorSpace": "Linear",
+  "accelerometerFrequency": 0,
+  "stripEngineCode": true,
+  "managedStrippingLevel": "Medium"
+}

@@ -1,0 +1,3 @@
+SHA256: 7d4dd01c6b55b826e435c322313dac0cfa1d1d87fede5899c0c439e0c12a7b8d
+Package: DaHuang-v1.0.0-Playable-Package.tar.gz
+App: 大荒 v1.0.0
