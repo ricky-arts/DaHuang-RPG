@@ -5,7 +5,11 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.*;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.view.Gravity;
+import java.io.InputStream;
+import java.util.HashMap;
 import java.util.Map;
 
 public class MainActivity extends Activity implements ChessBoardView.OnTileClickListener {
@@ -26,15 +30,21 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
     private TextView tvSynergies;
     private LinearLayout shopRowLayout;
     private LinearLayout itemBenchLayout;
+    private LinearLayout detailCardLayout;
+    private ImageView ivDetailPortrait;
     private TextView tvDetailFeed;
+
+    // 图片缓存
+    private final Map<String, Bitmap> cardBitmaps = new HashMap<>();
+    private final Map<String, Bitmap> itemBitmaps = new HashMap<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         engine = new ChessEngine();
+        loadUiBitmaps();
 
-        // 横屏金铲铲竞技场布局：左侧 65% 战棋主棋盘与备战席，右侧 35% 运营操作控制台
         rootContainer = new LinearLayout(this);
         rootContainer.setOrientation(LinearLayout.HORIZONTAL);
         rootContainer.setBackgroundColor(Color.parseColor("#080D14"));
@@ -63,23 +73,50 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         refreshAllViews();
     }
 
+    private void loadUiBitmaps() {
+        String[] heroes = {"nezha", "yangjian", "tongtian", "baihe", "linghu", "wubing", "leizhenzi", "zhaogongming", "kongxuan", "houtu"};
+        for (String h : heroes) {
+            Bitmap b = loadAssetBitmap("tft_card_" + h + ".png");
+            if (b != null) cardBitmaps.put(h, b);
+        }
+
+        String[] items = {"sword", "bow", "tear", "armor", "ie", "guinsoo"};
+        for (String it : items) {
+            Bitmap b = loadAssetBitmap("tft_item_" + it + ".png");
+            if (b != null) itemBitmaps.put(it, b);
+        }
+    }
+
+    private Bitmap loadAssetBitmap(String filename) {
+        try {
+            InputStream is = getAssets().open(filename);
+            return BitmapFactory.decodeStream(is);
+        } catch (Exception e1) {
+            try {
+                String path = "/opt/cc-haha/HongHuangGame/android_src/res/drawable-nodpi/" + filename;
+                return BitmapFactory.decodeFile(path);
+            } catch (Exception ignored) {}
+        }
+        return null;
+    }
+
     private void setupControlPanel() {
         controlPanel.removeAllViews();
 
-        // 1. 金铲铲顶部经济与人口状态
+        // 1. 玩家顶部状态
         tvPlayerInfo = new TextView(this);
         tvPlayerInfo.setTextSize(13);
         tvPlayerInfo.setTextColor(Color.parseColor("#F1C40F"));
         controlPanel.addView(tvPlayerInfo);
 
-        // 2. 羁绊激活信息栏 (Synergies)
+        // 2. 羁绊
         tvSynergies = new TextView(this);
         tvSynergies.setTextSize(11);
         tvSynergies.setTextColor(Color.parseColor("#2ECC71"));
         tvSynergies.setPadding(0, 4, 0, 4);
         controlPanel.addView(tvSynergies);
 
-        // 3. 运营操作按钮组 (升人口 4金 / 刷新 2金 / 开战)
+        // 3. 操作按钮
         LinearLayout opLayout = new LinearLayout(this);
         opLayout.setOrientation(LinearLayout.HORIZONTAL);
         opLayout.setGravity(Gravity.CENTER);
@@ -120,7 +157,7 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
 
         controlPanel.addView(opLayout);
 
-        // 4. 金铲铲 5 张英雄购买卡槽
+        // 4. 商店卡池
         TextView tvShopTitle = new TextView(this);
         tvShopTitle.setText("【 天机道坊 · 仙魔卡池 (点击购买) 】");
         tvShopTitle.setTextColor(Color.parseColor("#E67E22"));
@@ -132,9 +169,9 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         shopRowLayout.setOrientation(LinearLayout.VERTICAL);
         controlPanel.addView(shopRowLayout);
 
-        // 5. 金铲铲装备库 (散件与合成大件)
+        // 5. 装备库 (带图形图标与文字)
         TextView tvItemTitle = new TextView(this);
-        tvItemTitle.setText("【 装备库 (点击装备赋能给选中棋子，双散件自动合成) 】");
+        tvItemTitle.setText("【 装备库 (点击装备赋能给选中棋子) 】");
         tvItemTitle.setTextColor(Color.parseColor("#9B59B6"));
         tvItemTitle.setTextSize(11);
         tvItemTitle.setPadding(0, 4, 0, 2);
@@ -144,19 +181,33 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         itemBenchLayout.setOrientation(LinearLayout.HORIZONTAL);
         controlPanel.addView(itemBenchLayout);
 
-        // 6. 详细战报与英雄传记
+        // 6. 英雄全幅高精原画卡牌展示区 (金铲铲卡牌立绘沉浸展示)
+        detailCardLayout = new LinearLayout(this);
+        detailCardLayout.setOrientation(LinearLayout.HORIZONTAL);
+        detailCardLayout.setPadding(0, 6, 0, 6);
+        detailCardLayout.setGravity(Gravity.CENTER_VERTICAL);
+
+        ivDetailPortrait = new ImageView(this);
+        LinearLayout.LayoutParams ivLp = new LinearLayout.LayoutParams(90, 120);
+        ivLp.rightMargin = 12;
+        ivDetailPortrait.setLayoutParams(ivLp);
+        ivDetailPortrait.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        detailCardLayout.addView(ivDetailPortrait);
+
         ScrollView sv = new ScrollView(this);
         LinearLayout.LayoutParams svLp = new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f
+            LinearLayout.LayoutParams.MATCH_PARENT, 120
         );
         sv.setLayoutParams(svLp);
 
         tvDetailFeed = new TextView(this);
         tvDetailFeed.setTextColor(Color.parseColor("#BDC3C7"));
         tvDetailFeed.setTextSize(10);
-        tvDetailFeed.setText("欢迎踏入《大荒：洪荒弈道》！\n三张同名棋子自动升星（二星/三星）！两件基础散件装备到同一棋子身上自动熔铸成金铲铲神级大件！");
+        tvDetailFeed.setText("欢迎踏入《大荒：洪荒弈道》！\n三张同名棋子自动升星！两件基础散件装备到同一棋子身上自动熔铸成金铲铲神级大件！");
         sv.addView(tvDetailFeed);
-        controlPanel.addView(sv);
+        detailCardLayout.addView(sv);
+
+        controlPanel.addView(detailCardLayout);
     }
 
     private void refreshAllViews() {
@@ -188,6 +239,7 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
                 btnCard.setOnClickListener(v -> {
                     if (engine.buyChampion(cardIdx)) {
                         feedLog("【招募英雄】花费 " + card.cost + " 金币招募【" + card.name + "】入座备战席！");
+                        showChampionDetailCard(card);
                         refreshAllViews();
                     } else {
                         Toast.makeText(this, "备战席已满或金币不足！", Toast.LENGTH_SHORT).show();
@@ -207,23 +259,56 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         for (int i = 0; i < engine.itemBench.size(); i++) {
             final int itIdx = i;
             TFTItem item = engine.itemBench.get(i);
+
+            LinearLayout itemCol = new LinearLayout(this);
+            itemCol.setOrientation(LinearLayout.VERTICAL);
+            itemCol.setGravity(Gravity.CENTER);
+            itemCol.setPadding(4, 2, 4, 2);
+
+            ImageView ivItem = new ImageView(this);
+            LinearLayout.LayoutParams ivItemLp = new LinearLayout.LayoutParams(40, 40);
+            ivItem.setLayoutParams(ivItemLp);
+
+            String itemKey = mapItemToKey(item.id);
+            Bitmap bmp = itemBitmaps.get(itemKey);
+            if (bmp != null) {
+                ivItem.setImageBitmap(bmp);
+            } else {
+                ivItem.setBackgroundColor(item.id.isCompleted ? Color.parseColor("#D35400") : Color.parseColor("#2980B9"));
+            }
+
             Button btnItem = new Button(this);
-            btnItem.setText(item.id.name);
-            btnItem.setTextSize(9);
-            btnItem.setBackgroundColor(itIdx == selectedItemIdx ? Color.parseColor("#F1C40F") : Color.parseColor(item.id.isCompleted ? "#D35400" : "#2980B9"));
+            btnItem.setText(item.id.name.substring(0, Math.min(3, item.id.name.length())));
+            btnItem.setTextSize(8);
+            btnItem.setBackgroundColor(itIdx == selectedItemIdx ? Color.parseColor("#F1C40F") : Color.parseColor("#2C3E50"));
             btnItem.setTextColor(Color.WHITE);
             btnItem.setOnClickListener(v -> {
                 selectedItemIdx = (selectedItemIdx == itIdx) ? -1 : itIdx;
-                feedLog("【选中装备】" + item.id.name + " - " + item.id.description + "\n(点击棋盘上的英雄棋子即可穿戴或合成金铲铲大件！)");
+                feedLog("【选中装备】" + item.id.name + "\n效果：" + item.id.description + "\n(点击棋盘上的英雄棋子即可穿戴或合成金铲铲大件！)");
                 refreshAllViews();
             });
-            itemBenchLayout.addView(btnItem);
+
+            itemCol.addView(ivItem);
+            itemCol.addView(btnItem);
+            itemBenchLayout.addView(itemCol);
         }
 
         boardView.selectedBenchIdx = this.selectedBenchIdx;
         boardView.selectedBoardR = this.selectedBoardR;
         boardView.selectedBoardC = this.selectedBoardC;
         boardView.invalidate();
+    }
+
+    private String mapItemToKey(TFTItem.ItemID id) {
+        switch (id) {
+            case BF_SWORD: return "sword";
+            case RECURVE_BOW: return "bow";
+            case TEAR: return "tear";
+            case CHAIN_VEST: return "armor";
+            case INFINITY_EDGE: return "ie";
+            case GUINSOO_RAGEBLADE: return "guinsoo";
+            default: return "sword";
+        }
     }
 
     private int getCostColor(int cost) {
@@ -243,6 +328,7 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
             if (engine.equipItemToChampion(selectedItemIdx, engine.bench[idx])) {
                 feedLog("【穿戴成功】成功将装备给予【" + engine.bench[idx].name + "】！");
                 selectedItemIdx = -1;
+                showChampionDetailCard(engine.bench[idx]);
                 refreshAllViews();
                 return;
             }
@@ -256,7 +342,7 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
             selectedBoardC = -1;
             ChessChampion c = engine.bench[idx];
             if (c != null) {
-                showChampionLore(c);
+                showChampionDetailCard(c);
             }
         }
         refreshAllViews();
@@ -266,7 +352,7 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
     public void onBoardTileClicked(int r, int c) {
         if (r < 2) {
             if (engine.enemyBoard[r][c] != null) {
-                showChampionLore(engine.enemyBoard[r][c]);
+                showChampionDetailCard(engine.enemyBoard[r][c]);
             }
             return;
         }
@@ -275,6 +361,7 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
             if (engine.equipItemToChampion(selectedItemIdx, engine.board[r][c])) {
                 feedLog("【穿戴成功】成功将装备给予【" + engine.board[r][c].name + "】！");
                 selectedItemIdx = -1;
+                showChampionDetailCard(engine.board[r][c]);
                 refreshAllViews();
                 return;
             }
@@ -297,13 +384,23 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
             if (engine.board[r][c] != null) {
                 selectedBoardR = r;
                 selectedBoardC = c;
-                showChampionLore(engine.board[r][c]);
+                showChampionDetailCard(engine.board[r][c]);
             }
         }
         refreshAllViews();
     }
 
-    private void showChampionLore(ChessChampion c) {
+    private void showChampionDetailCard(ChessChampion c) {
+        // 展示金铲铲英雄高精卡牌立绘！
+        String key = c.id.replace("c_", "");
+        Bitmap portrait = cardBitmaps.get(key);
+        if (portrait != null) {
+            ivDetailPortrait.setVisibility(View.VISIBLE);
+            ivDetailPortrait.setImageBitmap(portrait);
+        } else {
+            ivDetailPortrait.setVisibility(View.GONE);
+        }
+
         StringBuilder sb = new StringBuilder();
         sb.append("★【").append(c.name).append("】").append(c.star).append("星 (").append(c.origin).append("·").append(c.roleClass).append(")\n")
           .append("属性：气血 ").append(c.getMaxHp()).append(" ｜ 攻击 ").append(c.getAttack())

@@ -3,10 +3,13 @@ package com.honghuang.rpg;
 import android.content.Context;
 import android.graphics.*;
 import android.view.View;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * 金铲铲之战标准横屏战棋网格棋盘 (Hex/Grid Arena)
- * 具备底图背景、棋盘网格、实体位移走砍、血条蓝条、装备法宝图标与法术粒子演播
+ * 具备底图背景、真实棋子头像/法相、走砍位移、血条蓝条、装备图标与法术粒子演播
  */
 public class ChessBoardView extends View implements ChessBattleSimulator.BattleEventListener {
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -22,13 +25,14 @@ public class ChessBoardView extends View implements ChessBattleSimulator.BattleE
     public int selectedBoardR = -1;
     public int selectedBoardC = -1;
 
-    // 战斗阶段 (0: 准备/运营阶段, 1: 真实对局移动走砍阶段)
+    // 战斗阶段
     public int battlePhase = 0;
     private int combatDurationTicks = 0;
     private float globalTime = 0f;
 
-    // 背景图缓存
+    // 贴图缓存
     private Bitmap arenaBgBitmap = null;
+    private final Map<String, Bitmap> pawnBitmaps = new HashMap<>();
 
     public interface OnTileClickListener {
         void onBenchClicked(int idx);
@@ -40,17 +44,38 @@ public class ChessBoardView extends View implements ChessBattleSimulator.BattleE
     public ChessBoardView(Context context) {
         super(context);
         simulator.listener = this;
-        loadArenaBg();
+        loadTextures(context);
     }
 
-    private void loadArenaBg() {
-        try {
-            String path = "/opt/cc-haha/HongHuangGame/android_src/res/drawable-nodpi/tft_arena_board.png";
-            Bitmap raw = BitmapFactory.decodeFile(path);
-            if (raw != null) {
-                arenaBgBitmap = raw;
+    private void loadTextures(Context context) {
+        // 1. 加载竞技场棋盘背景
+        arenaBgBitmap = loadBitmap(context, "tft_arena_board.png");
+
+        // 2. 加载棋子棋盘头像法相 (包含哪吒、杨戬、通天、白鹤、灵狐、巫兵、雷震子、赵公明、孔宣、后土、东皇等)
+        String[] pawnFiles = new String[] {
+            "nezha", "yangjian", "tongtian", "baihe", "linghu",
+            "wubing", "leizhenzi", "zhaogongming", "kongxuan", "houtu", "donghuang"
+        };
+        for (String key : pawnFiles) {
+            Bitmap bmp = loadBitmap(context, "tft_pawn_" + key + ".png");
+            if (bmp != null) {
+                pawnBitmaps.put(key, bmp);
             }
-        } catch (Exception ignored) {}
+        }
+    }
+
+    private Bitmap loadBitmap(Context context, String filename) {
+        try {
+            InputStream is = context.getAssets().open(filename);
+            return BitmapFactory.decodeStream(is);
+        } catch (Exception e1) {
+            // 尝试通过文件系统路径加载
+            try {
+                String path = "/opt/cc-haha/HongHuangGame/android_src/res/drawable-nodpi/" + filename;
+                return BitmapFactory.decodeFile(path);
+            } catch (Exception ignored) {}
+        }
+        return null;
     }
 
     public void setEngine(ChessEngine engine) {
@@ -128,14 +153,15 @@ public class ChessBoardView extends View implements ChessBattleSimulator.BattleE
 
         globalTime += 0.05f;
 
-        // 1. 绘制高清金铲铲竞技场天台背景
+        // 1. 绘制高清金铲铲竞技场天台实景背景 (支持 Assets / 自动补全)
         if (arenaBgBitmap != null) {
             Rect src = new Rect(0, 0, arenaBgBitmap.getWidth(), arenaBgBitmap.getHeight());
             Rect dst = new Rect(0, 0, w, h);
             canvas.drawBitmap(arenaBgBitmap, src, dst, paint);
         } else {
+            // 水墨天台备用渐变
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(Color.parseColor("#081018"));
+            paint.setColor(Color.parseColor("#08121C"));
             canvas.drawRect(0, 0, w, h, paint);
         }
 
@@ -146,7 +172,6 @@ public class ChessBoardView extends View implements ChessBattleSimulator.BattleE
         float tileW = (w - 30.0f) / 8.0f;
         float tileH = boardH / 4.0f;
 
-        // 楚河汉界分界线
         paint.setColor(Color.parseColor("#D4AF37"));
         paint.setStrokeWidth(2);
         canvas.drawLine(15, boardTop + tileH * 2, w - 15, boardTop + tileH * 2, paint);
@@ -158,8 +183,8 @@ public class ChessBoardView extends View implements ChessBattleSimulator.BattleE
                 boolean isSelected = (r == selectedBoardR && c == selectedBoardC);
 
                 boolean isEven = (r + c) % 2 == 0;
-                int tileColor = r < 2 ? (isEven ? Color.parseColor("#8015202B") : Color.parseColor("#80101A24"))
-                                      : (isEven ? Color.parseColor("#80122A26") : Color.parseColor("#800D211E"));
+                int tileColor = r < 2 ? (isEven ? Color.parseColor("#6615202B") : Color.parseColor("#66101A24"))
+                                      : (isEven ? Color.parseColor("#66122A26") : Color.parseColor("#660D211E"));
 
                 paint.setStyle(Paint.Style.FILL);
                 paint.setColor(tileColor);
@@ -175,10 +200,10 @@ public class ChessBoardView extends View implements ChessBattleSimulator.BattleE
                 // 准备阶段绘制静态棋子
                 if (battlePhase == 0) {
                     if (r < 2 && engine.enemyBoard[r][c] != null) {
-                        drawStaticChampionPawn(canvas, engine.enemyBoard[r][c], tx + tileW * 0.5f, ty + tileH * 0.5f, tileW * 0.36f, false);
+                        drawStaticChampionPawn(canvas, engine.enemyBoard[r][c], tx + tileW * 0.5f, ty + tileH * 0.5f, tileW * 0.38f, false);
                     }
                     if (r >= 2 && engine.board[r][c] != null) {
-                        drawStaticChampionPawn(canvas, engine.board[r][c], tx + tileW * 0.5f, ty + tileH * 0.5f, tileW * 0.36f, true);
+                        drawStaticChampionPawn(canvas, engine.board[r][c], tx + tileW * 0.5f, ty + tileH * 0.5f, tileW * 0.38f, true);
                     }
                 }
             }
@@ -193,7 +218,7 @@ public class ChessBoardView extends View implements ChessBattleSimulator.BattleE
                 if (e.isAlive) {
                     float px = 15 + e.gridX * tileW + tileW * 0.5f;
                     float py = boardTop + e.gridY * tileH + tileH * 0.5f;
-                    drawLiveChampionPawn(canvas, e, px, py, tileW * 0.36f, false);
+                    drawLiveChampionPawn(canvas, e, px, py, tileW * 0.38f, false);
                 }
             }
 
@@ -201,7 +226,7 @@ public class ChessBoardView extends View implements ChessBattleSimulator.BattleE
                 if (u.isAlive) {
                     float px = 15 + u.gridX * tileW + tileW * 0.5f;
                     float py = boardTop + u.gridY * tileH + tileH * 0.5f;
-                    drawLiveChampionPawn(canvas, u, px, py, tileW * 0.36f, true);
+                    drawLiveChampionPawn(canvas, u, px, py, tileW * 0.38f, true);
                 }
             }
 
@@ -239,7 +264,7 @@ public class ChessBoardView extends View implements ChessBattleSimulator.BattleE
             canvas.drawText((i + 1) + "", bx + benchTileW * 0.5f, benchTop + 14, paint);
 
             if (engine.bench[i] != null) {
-                drawStaticChampionPawn(canvas, engine.bench[i], bx + benchTileW * 0.5f, benchTop + benchTileH * 0.55f, benchTileW * 0.36f, true);
+                drawStaticChampionPawn(canvas, engine.bench[i], bx + benchTileW * 0.5f, benchTop + benchTileH * 0.55f, benchTileW * 0.38f, true);
             }
         }
 
@@ -254,16 +279,16 @@ public class ChessBoardView extends View implements ChessBattleSimulator.BattleE
     }
 
     private void drawStaticChampionPawn(Canvas canvas, ChessChampion c, float cx, float cy, float radius, boolean isPlayer) {
-        drawPawnCore(canvas, c.name, c.star, c.items.size(), cx, cy, radius, isPlayer, 1.0f, 0.0f);
+        drawPawnCore(canvas, c.id, c.name, c.star, c.items.size(), cx, cy, radius, isPlayer, 1.0f, 0.0f);
     }
 
     private void drawLiveChampionPawn(Canvas canvas, LiveChampionEntity live, float cx, float cy, float radius, boolean isPlayer) {
         float hpRate = (float)live.curHp / (float)live.maxHp;
         float manaRate = (float)live.curMana / (float)live.maxMana;
-        drawPawnCore(canvas, live.baseData.name, live.baseData.star, live.baseData.items.size(), cx, cy, radius, isPlayer, hpRate, manaRate);
+        drawPawnCore(canvas, live.baseData.id, live.baseData.name, live.baseData.star, live.baseData.items.size(), cx, cy, radius, isPlayer, hpRate, manaRate);
     }
 
-    private void drawPawnCore(Canvas canvas, String name, int star, int itemCount, float cx, float cy, float radius, boolean isPlayer, float hpRate, float manaRate) {
+    private void drawPawnCore(Canvas canvas, String id, String name, int star, int itemCount, float cx, float cy, float radius, boolean isPlayer, float hpRate, float manaRate) {
         paint.setStyle(Paint.Style.FILL);
 
         int starColor = (star == 1) ? Color.parseColor("#2ECC71") :
@@ -278,28 +303,46 @@ public class ChessBoardView extends View implements ChessBattleSimulator.BattleE
             meshVFX.drawArrayGridMesh(canvas, cx, cy, radius * 1.35f, globalTime * 30.0f, Color.parseColor("#F1C40F"), Color.WHITE);
         }
 
-        // 棋子底座
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(isPlayer ? Color.parseColor("#2C3E50") : Color.parseColor("#800000"));
-        paint.setAlpha(255);
-        canvas.drawCircle(cx, cy, radius, paint);
+        // 查找棋子对应生成的高清头像
+        String key = id.replace("c_", "");
+        Bitmap avatar = pawnBitmaps.get(key);
 
+        if (avatar != null) {
+            // 绘制圆形剪裁的高精生图英雄头像！
+            canvas.save();
+            Path clipPath = new Path();
+            clipPath.addCircle(cx, cy, radius, Path.Direction.CW);
+            canvas.clipPath(clipPath);
+
+            Rect src = new Rect(0, 0, avatar.getWidth(), avatar.getHeight());
+            RectF dst = new RectF(cx - radius, cy - radius, cx + radius, cy + radius);
+            canvas.drawBitmap(avatar, src, dst, paint);
+            canvas.restore();
+        } else {
+            // 备用底座
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(isPlayer ? Color.parseColor("#2C3E50") : Color.parseColor("#800000"));
+            paint.setAlpha(255);
+            canvas.drawCircle(cx, cy, radius, paint);
+
+            paint.setColor(Color.WHITE);
+            paint.setTextSize(radius * 0.58f);
+            paint.setTextAlign(Paint.Align.CENTER);
+            canvas.drawText(name.substring(0, Math.min(2, name.length())), cx, cy + radius * 0.22f, paint);
+        }
+
+        // 英雄品质圆环外框
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(3);
         paint.setColor(starColor);
         canvas.drawCircle(cx, cy, radius, paint);
 
-        // 名字
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(Color.WHITE);
-        paint.setTextSize(radius * 0.58f);
-        paint.setTextAlign(Paint.Align.CENTER);
-        canvas.drawText(name.substring(0, Math.min(2, name.length())), cx, cy + radius * 0.22f, paint);
-
         // 星级 (★ / ★★ / ★★★)
         String stars = (star == 1) ? "★" : (star == 2 ? "★★" : "★★★");
+        paint.setStyle(Paint.Style.FILL);
         paint.setColor(Color.parseColor("#F1C40F"));
-        paint.setTextSize(radius * 0.42f);
+        paint.setTextSize(radius * 0.45f);
+        paint.setTextAlign(Paint.Align.CENTER);
         canvas.drawText(stars, cx, cy - radius * 0.65f, paint);
 
         // 金铲铲标准血条与蓝条
@@ -319,7 +362,7 @@ public class ChessBoardView extends View implements ChessBattleSimulator.BattleE
         paint.setColor(Color.parseColor("#3498DB"));
         canvas.drawRect(cx - barW * 0.5f, manaY, cx - barW * 0.5f + (barW * manaRate), manaY + 3.0f, paint);
 
-        // 装备格指示点 (1~3格金铲铲装备指示)
+        // 装备指示
         if (itemCount > 0) {
             paint.setStyle(Paint.Style.FILL);
             for (int k = 0; k < itemCount; k++) {
