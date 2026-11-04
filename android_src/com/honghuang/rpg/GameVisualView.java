@@ -23,10 +23,13 @@ public class GameVisualView extends View {
 
     // 动作与技能特效状态机
     private String currentAction = "IDLE"; // "IDLE", "SLASH", "CAST", "ULTIMATE", "HIT"
-    private int actionFrame = 0; // 动作帧计时器 (0~30)
-    private float projectileX = -1f; // 技能弹道飞掠位置
-    private float screenShakeX = 0f; // 震屏偏移
+    private int actionFrame = 0; // 动作帧计时器
+    private float projectileX = -1f;
+    private float screenShakeX = 0f;
     private float screenShakeY = 0f;
+
+    // 当前战斗中玩家角色的主题样式 (SWORD, FOX, TITAN)
+    private String activeHeroTheme = "SWORD";
 
     // 怪物梯度展示
     private MonsterEntity.MonsterTier monsterTier = MonsterEntity.MonsterTier.NORMAL;
@@ -51,25 +54,27 @@ public class GameVisualView extends View {
         invalidate();
     }
 
+    public void setActiveHeroTheme(String theme) {
+        this.activeHeroTheme = theme;
+        invalidate();
+    }
+
     public void setMonsterInfo(MonsterEntity.MonsterTier tier, String name) {
         this.monsterTier = tier;
         this.monsterName = name;
         invalidate();
     }
 
-    /**
-     * 触发角色动作与技能绚丽弹道特效
-     */
     public void triggerCombatSkillAnimation(String actionType, String effectText) {
         this.currentAction = actionType;
-        this.actionFrame = 25; // 25 帧动画生命周期
-        this.projectileX = 0.32f; // 从主角位置起始飞行
+        this.actionFrame = 26;
+        this.projectileX = 0.32f;
         this.combatEffectText = effectText;
-        this.effectTimer = 40;
+        this.effectTimer = 42;
 
         if ("ULTIMATE".equals(actionType) || "HIT".equals(actionType)) {
-            this.screenShakeX = (float)((Math.random() - 0.5) * 16.0);
-            this.screenShakeY = (float)((Math.random() - 0.5) * 16.0);
+            this.screenShakeX = (float)((Math.random() - 0.5) * 18.0);
+            this.screenShakeY = (float)((Math.random() - 0.5) * 18.0);
         } else {
             this.screenShakeX = 0f;
             this.screenShakeY = 0f;
@@ -92,7 +97,6 @@ public class GameVisualView extends View {
         int h = getHeight();
         if (w <= 0 || h <= 0) return;
 
-        // 震屏矩阵变换
         canvas.save();
         if (actionFrame > 15 && (screenShakeX != 0f || screenShakeY != 0f)) {
             canvas.translate(screenShakeX, screenShakeY);
@@ -108,13 +112,12 @@ public class GameVisualView extends View {
 
         canvas.restore();
 
-        // 驱动帧动画与特效推进
         if (actionFrame > 0) {
             actionFrame--;
             if (projectileX >= 0) {
-                projectileX += 0.025f; // 弹道以每帧 2.5% 屏幕宽度向右侧飞掠
+                projectileX += 0.028f;
                 if (projectileX > 0.72f) {
-                    projectileX = -1f; // 击中敌人
+                    projectileX = -1f;
                 }
             }
             if (actionFrame == 0) {
@@ -132,14 +135,13 @@ public class GameVisualView extends View {
     }
 
     // ==========================================
-    // 1. 横屏角色形象立绘与法象
+    // 1. 横屏选角立绘
     // ==========================================
     private void drawCharacterSelect(Canvas canvas, int w, int h) {
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(Color.parseColor("#0A0F17"));
         canvas.drawRect(0, 0, w, h, paint);
 
-        // 青绿山水晕染背景
         paint.setColor(Color.parseColor("#132A32"));
         path.reset();
         path.moveTo(0, h * 0.85f);
@@ -155,7 +157,6 @@ public class GameVisualView extends View {
         float cy = h * 0.52f;
         float scale = Math.min(w, h) * 0.003f;
 
-        // 神轮
         int auraColor = selectedCharIndex == 0 ? Color.parseColor("#2ECC71") :
                         selectedCharIndex == 1 ? Color.parseColor("#E84118") :
                         Color.parseColor("#F1C40F");
@@ -301,43 +302,72 @@ public class GameVisualView extends View {
     }
 
     // ==========================================
-    // 3. 动态对战、角色突刺/施法动作与全屏技能弹道
+    // 3. 差异化角色专属动作、弹道与对阵战场
     // ==========================================
     private void drawCombatField(Canvas canvas, int w, int h) {
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(Color.parseColor("#0D1520"));
         canvas.drawRect(0, 0, w, h, paint);
 
-        // 八卦阵法地表
         paint.setColor(Color.parseColor("#152434"));
         canvas.drawCircle(w * 0.5f, h * 0.55f, Math.min(w, h) * 0.42f, paint);
 
         float scale = Math.min(w, h) * 0.003f;
 
-        // 计算动作偏移（突刺向前位移）
+        // 角色动作位移
         float px = w * 0.28f;
         float py = h * 0.60f;
         if ("SLASH".equals(currentAction)) {
-            px += (actionFrame > 12 ? (25 - actionFrame) * 4.0f : actionFrame * 4.0f); // 突刺冲锋动画
+            // 太微突刺，望舒后撤施法，断岳重力下砸
+            if ("TITAN".equals(activeHeroTheme)) {
+                py += (actionFrame > 12 ? (25 - actionFrame) * 3.0f : actionFrame * 3.0f);
+            } else if ("FOX".equals(activeHeroTheme)) {
+                px -= 10 * scale;
+            } else {
+                px += (actionFrame > 12 ? (25 - actionFrame) * 4.0f : actionFrame * 4.0f);
+            }
         } else if ("CAST".equals(currentAction)) {
-            py -= 15 * scale; // 悬空施法结印
+            py -= 15 * scale;
         }
 
-        // 绘制角色
-        paint.setColor(Color.parseColor("#2ECC71"));
-        paint.setAlpha(60);
-        canvas.drawCircle(px, py, 45 * scale, paint);
-        paint.setAlpha(255);
-        paint.setColor(Color.parseColor("#58D68D"));
-        canvas.drawCircle(px, py - 32 * scale, 18 * scale, paint);
-        canvas.drawRect(px - 22 * scale, py - 12 * scale, px + 22 * scale, py + 38 * scale, paint);
+        // 依据所选角色形象绘制完全不同的我方战斗法相
+        if ("FOX".equals(activeHeroTheme)) {
+            // 望舒九尾立象
+            paint.setColor(Color.parseColor("#E84118"));
+            paint.setAlpha(60);
+            canvas.drawCircle(px, py, 45 * scale, paint);
+            paint.setAlpha(255);
+            paint.setColor(Color.parseColor("#FF5E7E"));
+            canvas.drawCircle(px, py - 30 * scale, 16 * scale, paint);
+            paint.setColor(Color.parseColor("#C44569"));
+            canvas.drawRect(px - 18 * scale, py - 12 * scale, px + 18 * scale, py + 38 * scale, paint);
+        } else if ("TITAN".equals(activeHeroTheme)) {
+            // 断岳蛮荒战尊立象
+            paint.setColor(Color.parseColor("#E67E22"));
+            paint.setAlpha(60);
+            canvas.drawCircle(px, py, 55 * scale, paint);
+            paint.setAlpha(255);
+            paint.setColor(Color.parseColor("#D35400"));
+            canvas.drawCircle(px, py - 34 * scale, 22 * scale, paint);
+            paint.setColor(Color.parseColor("#7F8C8D"));
+            canvas.drawRect(px - 28 * scale, py - 10 * scale, px + 28 * scale, py + 42 * scale, paint);
+        } else {
+            // 太微青莲剑修立象
+            paint.setColor(Color.parseColor("#2ECC71"));
+            paint.setAlpha(60);
+            canvas.drawCircle(px, py, 45 * scale, paint);
+            paint.setAlpha(255);
+            paint.setColor(Color.parseColor("#58D68D"));
+            canvas.drawCircle(px, py - 32 * scale, 18 * scale, paint);
+            paint.setColor(Color.parseColor("#2C4E5E"));
+            canvas.drawRect(px - 22 * scale, py - 12 * scale, px + 22 * scale, py + 38 * scale, paint);
+        }
 
-        // 绘制怪物（根据怪物品质等级调整体型比例与光环）
+        // 怪物立绘
         float mScale = scale * monsterTier.scale;
         float ex = w * 0.72f;
         float ey = h * 0.50f;
 
-        // 精英怪银色雷环，首领怪金色火环
         if (monsterTier == MonsterEntity.MonsterTier.ELITE) {
             paint.setColor(Color.parseColor("#3498DB"));
             paint.setStyle(Paint.Style.STROKE);
@@ -360,53 +390,63 @@ public class GameVisualView extends View {
         canvas.drawCircle(ex, ey - 36 * mScale, 22 * mScale, paint);
         canvas.drawRect(ex - 32 * mScale, ey - 12 * mScale, ex + 32 * mScale, ey + 42 * mScale, paint);
 
-        // 怪物头顶等级标签
         paint.setColor(Color.parseColor(monsterTier.colorHex));
         paint.setTextSize(14 * scale);
         paint.setTextAlign(Paint.Align.CENTER);
         canvas.drawText("【" + monsterTier.title + "】" + monsterName, ex, ey - 60 * mScale, paint);
 
-        // 破韧虚弱状态
         if (isEnemyBroken) {
             paint.setColor(Color.parseColor("#F39C12"));
             paint.setTextSize(22);
             canvas.drawText("【 破韧虚弱 · 伤害暴增50% 】", ex, ey - 85 * mScale, paint);
         }
 
-        // 弹道特效 1: 【普攻·流光飞剑弹道】
-        if ("SLASH".equals(currentAction) && projectileX > 0) {
+        // 专属差异化技能特效
+        if (projectileX > 0) {
             float projPx = w * projectileX;
             float projPy = h * 0.52f;
-            paint.setColor(Color.parseColor("#2ECC71"));
-            paint.setStrokeWidth(6 * scale);
-            paint.setStyle(Paint.Style.STROKE);
-            canvas.drawLine(projPx - 40 * scale, projPy, projPx + 40 * scale, projPy, paint);
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(Color.WHITE);
-            canvas.drawCircle(projPx + 40 * scale, projPy, 8 * scale, paint); // 剑尖高光
+
+            if ("FOX".equals(activeHeroTheme)) {
+                // 望舒九尾水火灵珠弹道
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(Color.parseColor("#E84118"));
+                canvas.drawCircle(projPx, projPy, 14 * scale, paint);
+                paint.setColor(Color.parseColor("#3498DB"));
+                canvas.drawCircle(projPx - 10 * scale, projPy, 8 * scale, paint);
+            } else if ("TITAN".equals(activeHeroTheme)) {
+                // 断岳震地裂地煞气飞石
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(Color.parseColor("#E67E22"));
+                canvas.drawRect(projPx - 20 * scale, projPy - 10 * scale, projPx + 20 * scale, projPy + 10 * scale, paint);
+            } else {
+                // 太微青莲飞剑弹道
+                paint.setColor(Color.parseColor("#2ECC71"));
+                paint.setStrokeWidth(6 * scale);
+                paint.setStyle(Paint.Style.STROKE);
+                canvas.drawLine(projPx - 40 * scale, projPy, projPx + 40 * scale, projPy, paint);
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(Color.WHITE);
+                canvas.drawCircle(projPx + 40 * scale, projPy, 8 * scale, paint);
+            }
         }
 
-        // 弹道特效 2: 【五行·灭神印】九霄雷霆轰顶
         if ("CAST".equals(currentAction) && actionFrame > 5) {
             paint.setColor(Color.parseColor("#F1C40F"));
             paint.setStrokeWidth(8 * scale);
             paint.setStyle(Paint.Style.STROKE);
-            canvas.drawLine(ex, 0, ex, ey + 20, paint); // 从天而降金色雷柱
+            canvas.drawLine(ex, 0, ex, ey + 20, paint);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.parseColor("#E67E22"));
-            canvas.drawCircle(ex, ey + 20, 40 * scale, paint); // 轰炸爆破光圈
+            canvas.drawCircle(ex, ey + 20, 40 * scale, paint);
         }
 
-        // 弹道特效 3: 【本命·诛仙大阵】暗屏与四剑天降
         if ("ULTIMATE".equals(currentAction)) {
-            // 背景暗化
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.BLACK);
             paint.setAlpha(120);
             canvas.drawRect(0, 0, w, h, paint);
             paint.setAlpha(255);
 
-            // 四柄诛仙暗金神剑从虚空插向敌方
             paint.setColor(Color.parseColor("#9B59B6"));
             paint.setStrokeWidth(6 * scale);
             paint.setStyle(Paint.Style.STROKE);
@@ -415,20 +455,18 @@ public class GameVisualView extends View {
             canvas.drawLine(ex, ey - 200, ex, ey - 10, paint);
         }
 
-        // 血条绘制
         drawBar(canvas, 20, 20, w * 0.38f, 16, playerHpPercent, Color.parseColor("#2ECC71"), "我方真元气血");
         drawBar(canvas, w * 0.58f, 20, w * 0.38f, 16, enemyHpPercent, Color.parseColor(monsterTier.colorHex), monsterName + " 气血");
         drawBar(canvas, w * 0.58f, 44, w * 0.38f, 10, enemyTenacityPercent, Color.parseColor("#F39C12"), "定力韧性");
 
-        // 飘字伤害
         if (effectTimer > 0 && !combatEffectText.isEmpty()) {
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.parseColor("#F1C40F"));
             paint.setTextSize(26);
             paint.setTextAlign(Paint.Align.CENTER);
-            float alpha = (float)effectTimer / 40.0f;
+            float alpha = (float)effectTimer / 42.0f;
             paint.setAlpha((int)(alpha * 255));
-            canvas.drawText(combatEffectText, w * 0.5f, h * 0.35f - (40 - effectTimer), paint);
+            canvas.drawText(combatEffectText, w * 0.5f, h * 0.35f - (42 - effectTimer), paint);
             paint.setAlpha(255);
         }
     }
