@@ -160,11 +160,9 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
     }
 
     private void refreshAllViews() {
-        // 1. 刷新玩家顶部状态
         int boardCount = engine.getBoardCount();
         tvPlayerInfo.setText("第 " + engine.round + " 回合 ｜ 道尊气血:" + engine.playerHealth + " ｜ 灵石:" + engine.gold + " ｜ 人口:" + boardCount + "/" + engine.level + " (升级进度:" + engine.exp + "/" + engine.getExpForNextLevel() + ")");
 
-        // 2. 刷新羁绊信息
         Map<String, Integer> syn = engine.calculateSynergies();
         StringBuilder synSb = new StringBuilder("【活跃羁绊】：");
         if (syn.isEmpty()) {
@@ -176,7 +174,6 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         }
         tvSynergies.setText(synSb.toString());
 
-        // 3. 刷新商店 5 张卡
         shopRowLayout.removeAllViews();
         for (int i = 0; i < engine.shopCards.size(); i++) {
             final int cardIdx = i;
@@ -204,7 +201,6 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
             shopRowLayout.addView(btnCard);
         }
 
-        // 4. 刷新装备法宝栏
         equipRowLayout.removeAllViews();
         for (int i = 0; i < engine.equipmentInventory.size(); i++) {
             final int eqIdx = i;
@@ -239,13 +235,9 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         }
     }
 
-    /**
-     * 点击备战席棋子
-     */
     @Override
     public void onBenchClicked(int idx) {
         if (selectedEquipIdx >= 0 && engine.bench[idx] != null) {
-            // 穿戴装备
             if (engine.equipItemToChampion(selectedEquipIdx, engine.bench[idx])) {
                 feedLog("【祭炼穿戴】成功将法宝赐予【" + engine.bench[idx].name + "】！");
                 selectedEquipIdx = -1;
@@ -255,7 +247,7 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         }
 
         if (selectedBenchIdx == idx) {
-            selectedBenchIdx = -1; // 取消选中
+            selectedBenchIdx = -1;
         } else {
             selectedBenchIdx = idx;
             selectedBoardR = -1;
@@ -268,20 +260,15 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         refreshAllViews();
     }
 
-    /**
-     * 点击战棋盘格子 (布阵或穿戴装备)
-     */
     @Override
     public void onBoardTileClicked(int r, int c) {
         if (r < 2) {
-            // 点击敌方格子，查看敌方属性
             if (engine.enemyBoard[r][c] != null) {
                 showChampionLore(engine.enemyBoard[r][c]);
             }
             return;
         }
 
-        // 我方半场格子
         if (selectedEquipIdx >= 0 && engine.board[r][c] != null) {
             if (engine.equipItemToChampion(selectedEquipIdx, engine.board[r][c])) {
                 feedLog("【祭炼穿戴】成功将法宝赐予【" + engine.board[r][c].name + "】！");
@@ -292,7 +279,6 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         }
 
         if (selectedBenchIdx >= 0) {
-            // 从备战席上阵到该格子
             if (engine.deployChampion(selectedBenchIdx, r, c)) {
                 feedLog("【登坛布阵】棋子入阵战棋格 (" + r + "," + c + ")！");
                 selectedBenchIdx = -1;
@@ -300,7 +286,6 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
                 Toast.makeText(this, "上阵人口已达当前等级上限！请先研习道法提升人口！", Toast.LENGTH_SHORT).show();
             }
         } else if (selectedBoardR >= 0 && selectedBoardC >= 0) {
-            // 棋盘内换位
             ChessChampion temp = engine.board[r][c];
             engine.board[r][c] = engine.board[selectedBoardR][selectedBoardC];
             engine.board[selectedBoardR][selectedBoardC] = temp;
@@ -319,7 +304,9 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
     private void showChampionLore(ChessChampion c) {
         StringBuilder sb = new StringBuilder();
         sb.append("★【").append(c.name).append("】").append(c.star).append("星 (").append(c.origin).append("·").append(c.roleClass).append(")\n")
-          .append("属性：气血 ").append(c.getMaxHp()).append(" ｜ 攻伐 ").append(c.getAttack()).append(" ｜ 护体 ").append(c.getDefense()).append("\n")
+          .append("属性：气血 ").append(c.getMaxHp()).append(" ｜ 攻伐 ").append(c.getAttack())
+          .append(" ｜ 护甲 ").append(c.getArmor()).append(" ｜ 魔抗 ").append(c.getMagicResist())
+          .append("\n攻速 ").append(String.format("%.2f", c.getAttackSpeed())).append("次/秒 ｜ 法强 ").append(c.getApPercent()).append("% ｜ 射程 ").append(c.attackRange).append("格\n")
           .append("大招神通：").append(c.skillName).append("\n效果：").append(c.skillDesc).append("\n")
           .append("背景生平：").append(c.background);
         if (!c.equipments.isEmpty()) {
@@ -332,7 +319,7 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
     }
 
     /**
-     * 执行自走棋自动对战回合模拟
+     * 触发实时自走棋战斗模拟 (平滑位移走砍、粒子特效与满蓝大招)
      */
     private void executeCombatRound() {
         if (engine.getBoardCount() == 0) {
@@ -340,45 +327,29 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
             return;
         }
 
-        boardView.triggerCombatTurn();
+        feedLog("【⚔️ 全场开战】棋子开启实时走位寻敌，攻速平滑普攻回蓝，满蓝自动释放大招！");
+        boardView.startLiveBattle();
+    }
 
-        // 计算双方战斗力与羁绊
-        int myPower = 0;
-        for (int r = 2; r < 4; r++) {
-            for (int c = 0; c < 8; c++) {
-                if (engine.board[r][c] != null) {
-                    myPower += engine.board[r][c].getAttack() + engine.board[r][c].getMaxHp() / 10;
-                }
+    @Override
+    public void onCombatFinished(boolean isVictory) {
+        runOnUiThread(() -> {
+            if (isVictory) {
+                feedLog("【★ 回合大捷 ★】我方仙魔各显神通，万剑与雷霆倾泻，大获全胜！获得回合胜利灵石加成！");
+            } else {
+                int damage = Math.max(6, 12 - engine.getBoardCount() * 2);
+                engine.playerHealth = Math.max(0, engine.playerHealth - damage);
+                feedLog("【回合失利】敌方大阵煞气滔天，我方道尊受到 " + damage + " 点神魂真伤！剩余血量：" + engine.playerHealth);
             }
-        }
 
-        int enemyPower = 0;
-        for (int r = 0; r < 2; r++) {
-            for (int c = 0; c < 8; c++) {
-                if (engine.enemyBoard[r][c] != null) {
-                    enemyPower += engine.enemyBoard[r][c].getAttack() + engine.enemyBoard[r][c].getMaxHp() / 10;
-                }
+            if (engine.playerHealth <= 0) {
+                Toast.makeText(this, "道尊气血竭尽，重聚洪荒灵池！", Toast.LENGTH_LONG).show();
+                engine.playerHealth = 100;
             }
-        }
 
-        // 胜负判定与血量扣减
-        boolean victory = myPower >= (enemyPower * 0.85);
-        if (victory) {
-            feedLog("【★ 回合大捷 ★】我方仙魔各显神通，万剑与雷霆倾泻，大获全胜！获得回合胜利灵石加成！");
-        } else {
-            int damage = Math.max(5, (enemyPower - myPower) / 50);
-            engine.playerHealth = Math.max(0, engine.playerHealth - damage);
-            feedLog("【回合失利】敌方大阵煞气滔天，我方道尊受到 " + damage + " 点神魂真伤！剩余血量：" + engine.playerHealth);
-        }
-
-        if (engine.playerHealth <= 0) {
-            Toast.makeText(this, "道尊气血竭尽，重聚洪荒灵池！", Toast.LENGTH_LONG).show();
-            engine.playerHealth = 100;
-        }
-
-        // 回合结算，发牌发钱
-        engine.startNewRound();
-        refreshAllViews();
+            engine.startNewRound();
+            refreshAllViews();
+        });
     }
 
     private void feedLog(String msg) {
