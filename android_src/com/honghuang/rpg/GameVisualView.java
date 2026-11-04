@@ -8,6 +8,11 @@ public class GameVisualView extends View {
     private Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private Path path = new Path();
 
+    // 核心特效系统
+    private final ParticleSystem particleSys = new ParticleSystem();
+    private final MeshVFX meshVFX = new MeshVFX();
+    private final FrameAnimationController frameAnim = new FrameAnimationController();
+
     // 模式: "SELECT", "MAP", "COMBAT"
     private String mode = "SELECT";
     private int selectedCharIndex = 0;
@@ -23,10 +28,11 @@ public class GameVisualView extends View {
 
     // 动作与技能特效状态机
     private String currentAction = "IDLE"; // "IDLE", "SLASH", "CAST", "ULTIMATE", "HIT"
-    private int actionFrame = 0; // 动作帧计时器
+    private int actionFrame = 0;
     private float projectileX = -1f;
     private float screenShakeX = 0f;
     private float screenShakeY = 0f;
+    private float globalTime = 0f; // 驱动待机呼吸与网格旋转
 
     // 当前战斗中玩家角色的主题样式 (SWORD, FOX, TITAN)
     private String activeHeroTheme = "SWORD";
@@ -65,16 +71,46 @@ public class GameVisualView extends View {
         invalidate();
     }
 
+    /**
+     * 触发复合角色动作、面片网格、序列帧与粒子流喷射
+     */
     public void triggerCombatSkillAnimation(String actionType, String effectText) {
         this.currentAction = actionType;
-        this.actionFrame = 26;
+        this.actionFrame = 28;
         this.projectileX = 0.32f;
         this.combatEffectText = effectText;
         this.effectTimer = 42;
 
+        int w = getWidth() > 0 ? getWidth() : 1920;
+        int h = getHeight() > 0 ? getHeight() : 1080;
+        float px = w * 0.28f;
+        float py = h * 0.60f;
+        float ex = w * 0.72f;
+        float ey = h * 0.50f;
+
+        // 依据角色技能发射定制粒子束与序列帧
+        if ("SLASH".equals(actionType)) {
+            // 普攻：发射 24 颗向右飞驰的剑气流光粒子
+            int pColor = "FOX".equals(activeHeroTheme) ? Color.parseColor("#E84118") :
+                         "TITAN".equals(activeHeroTheme) ? Color.parseColor("#E67E22") :
+                         Color.parseColor("#2ECC71");
+            particleSys.emitDirected(px, py, ex, ey, 24, pColor, 7.0f, 22);
+
+        } else if ("CAST".equals(actionType)) {
+            // 施法：触发九天雷霆 6 帧连环破裂序列帧 + 目标受击粒子爆破
+            frameAnim.play(FrameAnimationController.AnimType.THUNDER_CRACK, ex, ey, Color.parseColor("#F1C40F"));
+            particleSys.emit(ex, ey, 36, Color.parseColor("#F39C12"), 8.0f, 9.0f, 25, true);
+
+        } else if ("ULTIMATE".equals(actionType)) {
+            // 大招：红莲绽放 8 帧序列帧 + 60 颗全屏扩散神剑金煞粒子
+            frameAnim.play(FrameAnimationController.AnimType.LOTUS_BURST, ex, ey, Color.parseColor("#9B59B6"));
+            particleSys.emit(ex, ey, 60, Color.parseColor("#9B59B6"), 12.0f, 10.0f, 32, true);
+        }
+
+        // 触发受击震屏
         if ("ULTIMATE".equals(actionType) || "HIT".equals(actionType)) {
-            this.screenShakeX = (float)((Math.random() - 0.5) * 18.0);
-            this.screenShakeY = (float)((Math.random() - 0.5) * 18.0);
+            this.screenShakeX = (float)((Math.random() - 0.5) * 22.0);
+            this.screenShakeY = (float)((Math.random() - 0.5) * 22.0);
         } else {
             this.screenShakeX = 0f;
             this.screenShakeY = 0f;
@@ -97,6 +133,8 @@ public class GameVisualView extends View {
         int h = getHeight();
         if (w <= 0 || h <= 0) return;
 
+        globalTime += 0.05f;
+
         canvas.save();
         if (actionFrame > 15 && (screenShakeX != 0f || screenShakeY != 0f)) {
             canvas.translate(screenShakeX, screenShakeY);
@@ -110,14 +148,32 @@ public class GameVisualView extends View {
             drawCombatField(canvas, w, h);
         }
 
+        // 绘制序列帧特效层
+        frameAnim.draw(canvas);
+
+        // 绘制粒子系统层
+        particleSys.draw(canvas);
+
         canvas.restore();
+
+        // 推进粒子、序列帧与动作状态
+        particleSys.update();
+        frameAnim.update();
 
         if (actionFrame > 0) {
             actionFrame--;
             if (projectileX >= 0) {
-                projectileX += 0.028f;
+                projectileX += 0.032f;
+                // 弹道飞行时沿途喷吐光尘粒子
+                float curProjX = w * projectileX;
+                float curProjY = h * 0.52f;
+                particleSys.emit(curProjX, curProjY, 2, Color.WHITE, 1.5f, 4.0f, 10, true);
+
                 if (projectileX > 0.72f) {
                     projectileX = -1f;
+                    // 弹道击中敌人瞬间播放爆破序列帧！
+                    frameAnim.play(FrameAnimationController.AnimType.HIT_EXPLODE, w * 0.72f, h * 0.50f, Color.parseColor("#F1C40F"));
+                    particleSys.emit(w * 0.72f, h * 0.50f, 20, Color.parseColor("#E74C3C"), 6.0f, 6.0f, 18, true);
                 }
             }
             if (actionFrame == 0) {
@@ -125,6 +181,8 @@ public class GameVisualView extends View {
                 screenShakeX = 0f;
                 screenShakeY = 0f;
             }
+            invalidate();
+        } else if (particleSys.getActiveCount() > 0 || frameAnim.isPlaying()) {
             invalidate();
         }
 
@@ -157,14 +215,12 @@ public class GameVisualView extends View {
         float cy = h * 0.52f;
         float scale = Math.min(w, h) * 0.003f;
 
+        // 八卦天地结界网格面片
         int auraColor = selectedCharIndex == 0 ? Color.parseColor("#2ECC71") :
                         selectedCharIndex == 1 ? Color.parseColor("#E84118") :
                         Color.parseColor("#F1C40F");
-        paint.setColor(auraColor);
-        paint.setAlpha(45);
-        canvas.drawCircle(cx, cy - 20 * scale, 130 * scale, paint);
+        meshVFX.drawArrayGridMesh(canvas, cx, cy - 20 * scale, 130 * scale, globalTime * 20.0f, auraColor, Color.parseColor("#2C3E50"));
 
-        paint.setAlpha(255);
         if (selectedCharIndex == 0) {
             drawSwordImmortal(canvas, cx, cy, scale);
         } else if (selectedCharIndex == 1) {
@@ -173,6 +229,7 @@ public class GameVisualView extends View {
             drawTitanWarrior(canvas, cx, cy, scale);
         }
 
+        paint.setStyle(Paint.Style.FILL);
         paint.setColor(Color.parseColor("#1B2A38"));
         canvas.drawRoundRect(cx - 140 * scale, cy + 115 * scale, cx + 140 * scale, cy + 135 * scale, 10, 10, paint);
     }
@@ -252,7 +309,7 @@ public class GameVisualView extends View {
     }
 
     // ==========================================
-    // 2. 横屏青绿大地图展示
+    // 2. 横屏青绿大地图
     // ==========================================
     private void drawOrientalMap(Canvas canvas, int w, int h) {
         paint.setStyle(Paint.Style.FILL);
@@ -302,71 +359,53 @@ public class GameVisualView extends View {
     }
 
     // ==========================================
-    // 3. 差异化角色专属动作、弹道与对阵战场
+    // 3. 粒子/面片/序列帧动作复合战场
     // ==========================================
     private void drawCombatField(Canvas canvas, int w, int h) {
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(Color.parseColor("#0D1520"));
         canvas.drawRect(0, 0, w, h, paint);
 
-        paint.setColor(Color.parseColor("#152434"));
-        canvas.drawCircle(w * 0.5f, h * 0.55f, Math.min(w, h) * 0.42f, paint);
-
         float scale = Math.min(w, h) * 0.003f;
 
-        // 角色动作位移
+        // 地面八卦旋转面片网格 (Quad Array Mesh)
+        meshVFX.drawArrayGridMesh(canvas, w * 0.5f, h * 0.55f, Math.min(w, h) * 0.42f, globalTime * 15.0f, Color.parseColor("#2ECC71"), Color.parseColor("#152434"));
+
+        // 角色骨骼动作（待机轻微呼吸律动 + 普攻突刺冲锋）
         float px = w * 0.28f;
-        float py = h * 0.60f;
+        float py = h * 0.60f + (float)Math.sin(globalTime * 3.0f) * 4.0f; // 呼吸悬浮
+
         if ("SLASH".equals(currentAction)) {
-            // 太微突刺，望舒后撤施法，断岳重力下砸
             if ("TITAN".equals(activeHeroTheme)) {
-                py += (actionFrame > 12 ? (25 - actionFrame) * 3.0f : actionFrame * 3.0f);
+                py += (actionFrame > 12 ? (25 - actionFrame) * 3.5f : actionFrame * 3.5f);
             } else if ("FOX".equals(activeHeroTheme)) {
-                px -= 10 * scale;
+                px -= 12 * scale;
             } else {
-                px += (actionFrame > 12 ? (25 - actionFrame) * 4.0f : actionFrame * 4.0f);
+                px += (actionFrame > 12 ? (25 - actionFrame) * 4.5f : actionFrame * 4.5f);
             }
         } else if ("CAST".equals(currentAction)) {
-            py -= 15 * scale;
+            py -= 16 * scale;
         }
 
-        // 依据所选角色形象绘制完全不同的我方战斗法相
+        // 绘制分面片骨骼角色
         if ("FOX".equals(activeHeroTheme)) {
-            // 望舒九尾立象
-            paint.setColor(Color.parseColor("#E84118"));
-            paint.setAlpha(60);
-            canvas.drawCircle(px, py, 45 * scale, paint);
-            paint.setAlpha(255);
+            meshVFX.drawBodySegment(canvas, px, py + 15 * scale, 36 * scale, 60 * scale, 0, Color.parseColor("#C44569"));
             paint.setColor(Color.parseColor("#FF5E7E"));
             canvas.drawCircle(px, py - 30 * scale, 16 * scale, paint);
-            paint.setColor(Color.parseColor("#C44569"));
-            canvas.drawRect(px - 18 * scale, py - 12 * scale, px + 18 * scale, py + 38 * scale, paint);
         } else if ("TITAN".equals(activeHeroTheme)) {
-            // 断岳蛮荒战尊立象
-            paint.setColor(Color.parseColor("#E67E22"));
-            paint.setAlpha(60);
-            canvas.drawCircle(px, py, 55 * scale, paint);
-            paint.setAlpha(255);
+            meshVFX.drawBodySegment(canvas, px, py + 15 * scale, 56 * scale, 64 * scale, 0, Color.parseColor("#7F8C8D"));
             paint.setColor(Color.parseColor("#D35400"));
             canvas.drawCircle(px, py - 34 * scale, 22 * scale, paint);
-            paint.setColor(Color.parseColor("#7F8C8D"));
-            canvas.drawRect(px - 28 * scale, py - 10 * scale, px + 28 * scale, py + 42 * scale, paint);
         } else {
-            // 太微青莲剑修立象
-            paint.setColor(Color.parseColor("#2ECC71"));
-            paint.setAlpha(60);
-            canvas.drawCircle(px, py, 45 * scale, paint);
-            paint.setAlpha(255);
+            meshVFX.drawBodySegment(canvas, px, py + 15 * scale, 44 * scale, 60 * scale, 0, Color.parseColor("#2C4E5E"));
             paint.setColor(Color.parseColor("#58D68D"));
             canvas.drawCircle(px, py - 32 * scale, 18 * scale, paint);
-            paint.setColor(Color.parseColor("#2C4E5E"));
-            canvas.drawRect(px - 22 * scale, py - 12 * scale, px + 22 * scale, py + 38 * scale, paint);
         }
 
         // 怪物立绘
         float mScale = scale * monsterTier.scale;
         float ex = w * 0.72f;
-        float ey = h * 0.50f;
+        float ey = h * 0.50f + (float)Math.cos(globalTime * 2.5f) * 3.0f;
 
         if (monsterTier == MonsterEntity.MonsterTier.ELITE) {
             paint.setColor(Color.parseColor("#3498DB"));
@@ -401,58 +440,18 @@ public class GameVisualView extends View {
             canvas.drawText("【 破韧虚弱 · 伤害暴增50% 】", ex, ey - 85 * mScale, paint);
         }
 
-        // 专属差异化技能特效
+        // 面片特效：绘制剑气/法术斩击 Ribbon 面片
         if (projectileX > 0) {
-            float projPx = w * projectileX;
-            float projPy = h * 0.52f;
-
-            if ("FOX".equals(activeHeroTheme)) {
-                // 望舒九尾水火灵珠弹道
-                paint.setStyle(Paint.Style.FILL);
-                paint.setColor(Color.parseColor("#E84118"));
-                canvas.drawCircle(projPx, projPy, 14 * scale, paint);
-                paint.setColor(Color.parseColor("#3498DB"));
-                canvas.drawCircle(projPx - 10 * scale, projPy, 8 * scale, paint);
-            } else if ("TITAN".equals(activeHeroTheme)) {
-                // 断岳震地裂地煞气飞石
-                paint.setStyle(Paint.Style.FILL);
-                paint.setColor(Color.parseColor("#E67E22"));
-                canvas.drawRect(projPx - 20 * scale, projPy - 10 * scale, projPx + 20 * scale, projPy + 10 * scale, paint);
-            } else {
-                // 太微青莲飞剑弹道
-                paint.setColor(Color.parseColor("#2ECC71"));
-                paint.setStrokeWidth(6 * scale);
-                paint.setStyle(Paint.Style.STROKE);
-                canvas.drawLine(projPx - 40 * scale, projPy, projPx + 40 * scale, projPy, paint);
-                paint.setStyle(Paint.Style.FILL);
-                paint.setColor(Color.WHITE);
-                canvas.drawCircle(projPx + 40 * scale, projPy, 8 * scale, paint);
-            }
-        }
-
-        if ("CAST".equals(currentAction) && actionFrame > 5) {
-            paint.setColor(Color.parseColor("#F1C40F"));
-            paint.setStrokeWidth(8 * scale);
-            paint.setStyle(Paint.Style.STROKE);
-            canvas.drawLine(ex, 0, ex, ey + 20, paint);
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(Color.parseColor("#E67E22"));
-            canvas.drawCircle(ex, ey + 20, 40 * scale, paint);
-        }
-
-        if ("ULTIMATE".equals(currentAction)) {
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(Color.BLACK);
-            paint.setAlpha(120);
-            canvas.drawRect(0, 0, w, h, paint);
-            paint.setAlpha(255);
-
-            paint.setColor(Color.parseColor("#9B59B6"));
-            paint.setStrokeWidth(6 * scale);
-            paint.setStyle(Paint.Style.STROKE);
-            canvas.drawLine(ex - 60, ey - 180, ex - 20, ey, paint);
-            canvas.drawLine(ex + 60, ey - 180, ex + 20, ey, paint);
-            canvas.drawLine(ex, ey - 200, ex, ey - 10, paint);
+            float curProjX = w * projectileX;
+            float curProjY = h * 0.52f;
+            meshVFX.drawSlashRibbon(
+                canvas,
+                curProjX - 80 * scale, curProjY,
+                curProjX + 30 * scale, curProjY,
+                24 * scale,
+                Color.parseColor("#2ECC71"), Color.WHITE,
+                (float)(actionFrame) / 28.0f
+            );
         }
 
         drawBar(canvas, 20, 20, w * 0.38f, 16, playerHpPercent, Color.parseColor("#2ECC71"), "我方真元气血");
