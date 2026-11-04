@@ -49,7 +49,7 @@ public class ChessBoardView extends View implements ChessBattleSimulator.BattleE
 
     private void loadTextures(Context context) {
         // 1. 加载竞技场棋盘背景
-        arenaBgBitmap = loadBitmap(context, "tft_arena_board.png");
+        arenaBgBitmap = AssetLoader.loadDrawableOrAsset(context, "tft_arena_board");
 
         // 2. 加载棋子棋盘头像法相 (包含哪吒、杨戬、通天、白鹤、灵狐、巫兵、雷震子、赵公明、孔宣、后土、东皇等)
         String[] pawnFiles = new String[] {
@@ -57,25 +57,11 @@ public class ChessBoardView extends View implements ChessBattleSimulator.BattleE
             "wubing", "leizhenzi", "zhaogongming", "kongxuan", "houtu", "donghuang"
         };
         for (String key : pawnFiles) {
-            Bitmap bmp = loadBitmap(context, "tft_pawn_" + key + ".png");
+            Bitmap bmp = AssetLoader.loadDrawableOrAsset(context, "tft_pawn_" + key);
             if (bmp != null) {
                 pawnBitmaps.put(key, bmp);
             }
         }
-    }
-
-    private Bitmap loadBitmap(Context context, String filename) {
-        try {
-            InputStream is = context.getAssets().open(filename);
-            return BitmapFactory.decodeStream(is);
-        } catch (Exception e1) {
-            // 尝试通过文件系统路径加载
-            try {
-                String path = "/opt/cc-haha/HongHuangGame/android_src/res/drawable-nodpi/" + filename;
-                return BitmapFactory.decodeFile(path);
-            } catch (Exception ignored) {}
-        }
-        return null;
     }
 
     public void setEngine(ChessEngine engine) {

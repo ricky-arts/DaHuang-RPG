@@ -6,9 +6,7 @@ import android.view.View;
 import android.widget.*;
 import android.graphics.Color;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.view.Gravity;
-import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -28,7 +26,7 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
     // 界面控件
     private TextView tvPlayerInfo;
     private TextView tvSynergies;
-    private LinearLayout shopRowLayout;
+    private LinearLayout shopCardContainer;
     private LinearLayout itemBenchLayout;
     private LinearLayout detailCardLayout;
     private ImageView ivDetailPortrait;
@@ -45,6 +43,7 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         engine = new ChessEngine();
         loadUiBitmaps();
 
+        // 横屏金铲铲竞技场布局：左侧 65% 战棋主棋盘与备战席，右侧 35% 运营操作控制台
         rootContainer = new LinearLayout(this);
         rootContainer.setOrientation(LinearLayout.HORIZONTAL);
         rootContainer.setBackgroundColor(Color.parseColor("#080D14"));
@@ -61,7 +60,7 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         controlPanel = new LinearLayout(this);
         controlPanel.setOrientation(LinearLayout.VERTICAL);
         controlPanel.setBackgroundColor(Color.parseColor("#0F1722"));
-        controlPanel.setPadding(16, 12, 16, 12);
+        controlPanel.setPadding(14, 10, 14, 10);
 
         LinearLayout.LayoutParams rightLp = new LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.MATCH_PARENT, 3.8f
@@ -71,41 +70,33 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         setContentView(rootContainer);
         setupControlPanel();
         refreshAllViews();
+
+        // 默认激活展示第一位代表性英雄的高清卡牌立绘！
+        if (!engine.shopCards.isEmpty() && engine.shopCards.get(0) != null) {
+            showChampionDetailCard(engine.shopCards.get(0));
+        }
     }
 
     private void loadUiBitmaps() {
-        String[] heroes = {"nezha", "yangjian", "tongtian", "baihe", "linghu", "wubing", "leizhenzi", "zhaogongming", "kongxuan", "houtu"};
+        String[] heroes = {"nezha", "yangjian", "tongtian", "baihe", "linghu", "wubing", "leizhenzi", "zhaogongming", "kongxuan", "houtu", "donghuang"};
         for (String h : heroes) {
-            Bitmap b = loadAssetBitmap("tft_card_" + h + ".png");
+            Bitmap b = AssetLoader.loadDrawableOrAsset(this, "tft_card_" + h);
             if (b != null) cardBitmaps.put(h, b);
         }
 
         String[] items = {"sword", "bow", "tear", "armor", "ie", "guinsoo"};
         for (String it : items) {
-            Bitmap b = loadAssetBitmap("tft_item_" + it + ".png");
+            Bitmap b = AssetLoader.loadDrawableOrAsset(this, "tft_item_" + it);
             if (b != null) itemBitmaps.put(it, b);
         }
-    }
-
-    private Bitmap loadAssetBitmap(String filename) {
-        try {
-            InputStream is = getAssets().open(filename);
-            return BitmapFactory.decodeStream(is);
-        } catch (Exception e1) {
-            try {
-                String path = "/opt/cc-haha/HongHuangGame/android_src/res/drawable-nodpi/" + filename;
-                return BitmapFactory.decodeFile(path);
-            } catch (Exception ignored) {}
-        }
-        return null;
     }
 
     private void setupControlPanel() {
         controlPanel.removeAllViews();
 
-        // 1. 玩家顶部状态
+        // 1. 金铲铲顶部状态 (回合/气血/金币/人口)
         tvPlayerInfo = new TextView(this);
-        tvPlayerInfo.setTextSize(13);
+        tvPlayerInfo.setTextSize(12);
         tvPlayerInfo.setTextColor(Color.parseColor("#F1C40F"));
         controlPanel.addView(tvPlayerInfo);
 
@@ -113,10 +104,10 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         tvSynergies = new TextView(this);
         tvSynergies.setTextSize(11);
         tvSynergies.setTextColor(Color.parseColor("#2ECC71"));
-        tvSynergies.setPadding(0, 4, 0, 4);
+        tvSynergies.setPadding(0, 2, 0, 4);
         controlPanel.addView(tvSynergies);
 
-        // 3. 操作按钮
+        // 3. 运营操作按钮组 (升人口 4金 / 刷新 2金 / 开战)
         LinearLayout opLayout = new LinearLayout(this);
         opLayout.setOrientation(LinearLayout.HORIZONTAL);
         opLayout.setGravity(Gravity.CENTER);
@@ -129,17 +120,17 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
                 feedLog("【升人口】花费 4 金币购买 4 点经验！当前等级：" + engine.level + "级");
                 refreshAllViews();
             } else {
-                Toast.makeText(this, "金币不足 4 块或已达九阶满级人口！", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "金币不足 4 块或已达满级人口！", Toast.LENGTH_SHORT).show();
             }
         });
         opLayout.addView(btnBuyExp);
 
         Button btnReroll = new Button(this);
-        btnReroll.setText("【刷新卡池 2金】");
+        btnReroll.setText("【刷新 2金】");
         btnReroll.setTextSize(10);
         btnReroll.setOnClickListener(v -> {
             if (engine.refreshShop(false)) {
-                feedLog("【D牌刷新】消耗 2 金币洗练当前商店！");
+                feedLog("【D牌刷新】消耗 2 金币洗练卡池！");
                 refreshAllViews();
             } else {
                 Toast.makeText(this, "金币不足 2 块无法刷新！", Toast.LENGTH_SHORT).show();
@@ -157,52 +148,56 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
 
         controlPanel.addView(opLayout);
 
-        // 4. 商店卡池
+        // 4. 金铲铲标准卡牌商店 (水平横向排列的卡牌槽位)
         TextView tvShopTitle = new TextView(this);
-        tvShopTitle.setText("【 天机道坊 · 仙魔卡池 (点击购买) 】");
+        tvShopTitle.setText("【 天机卡池 · 仙魔招募 (点击购入) 】");
         tvShopTitle.setTextColor(Color.parseColor("#E67E22"));
         tvShopTitle.setTextSize(11);
         tvShopTitle.setPadding(0, 4, 0, 2);
         controlPanel.addView(tvShopTitle);
 
-        shopRowLayout = new LinearLayout(this);
-        shopRowLayout.setOrientation(LinearLayout.VERTICAL);
-        controlPanel.addView(shopRowLayout);
+        HorizontalScrollView hsvShop = new HorizontalScrollView(this);
+        shopCardContainer = new LinearLayout(this);
+        shopCardContainer.setOrientation(LinearLayout.HORIZONTAL);
+        hsvShop.addView(shopCardContainer);
+        controlPanel.addView(hsvShop);
 
-        // 5. 装备库 (带图形图标与文字)
+        // 5. 金铲铲装备库 (真实图标)
         TextView tvItemTitle = new TextView(this);
-        tvItemTitle.setText("【 装备库 (点击装备赋能给选中棋子) 】");
+        tvItemTitle.setText("【 装备库 (点击选中后赋能英雄，双散件自动合成) 】");
         tvItemTitle.setTextColor(Color.parseColor("#9B59B6"));
         tvItemTitle.setTextSize(11);
         tvItemTitle.setPadding(0, 4, 0, 2);
         controlPanel.addView(tvItemTitle);
 
+        HorizontalScrollView hsvItem = new HorizontalScrollView(this);
         itemBenchLayout = new LinearLayout(this);
         itemBenchLayout.setOrientation(LinearLayout.HORIZONTAL);
-        controlPanel.addView(itemBenchLayout);
+        hsvItem.addView(itemBenchLayout);
+        controlPanel.addView(hsvItem);
 
-        // 6. 英雄全幅高精原画卡牌展示区 (金铲铲卡牌立绘沉浸展示)
+        // 6. 英雄全幅高精原画立绘展示卡 (金铲铲卡牌视窗)
         detailCardLayout = new LinearLayout(this);
         detailCardLayout.setOrientation(LinearLayout.HORIZONTAL);
-        detailCardLayout.setPadding(0, 6, 0, 6);
+        detailCardLayout.setPadding(0, 4, 0, 4);
         detailCardLayout.setGravity(Gravity.CENTER_VERTICAL);
 
         ivDetailPortrait = new ImageView(this);
-        LinearLayout.LayoutParams ivLp = new LinearLayout.LayoutParams(90, 120);
-        ivLp.rightMargin = 12;
+        LinearLayout.LayoutParams ivLp = new LinearLayout.LayoutParams(110, 140);
+        ivLp.rightMargin = 10;
         ivDetailPortrait.setLayoutParams(ivLp);
         ivDetailPortrait.setScaleType(ImageView.ScaleType.FIT_CENTER);
         detailCardLayout.addView(ivDetailPortrait);
 
         ScrollView sv = new ScrollView(this);
         LinearLayout.LayoutParams svLp = new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 120
+            LinearLayout.LayoutParams.MATCH_PARENT, 140
         );
         sv.setLayoutParams(svLp);
 
         tvDetailFeed = new TextView(this);
-        tvDetailFeed.setTextColor(Color.parseColor("#BDC3C7"));
-        tvDetailFeed.setTextSize(10);
+        tvDetailFeed.setTextColor(Color.parseColor("#CED6E0"));
+        tvDetailFeed.setTextSize(11);
         tvDetailFeed.setText("欢迎踏入《大荒：洪荒弈道》！\n三张同名棋子自动升星！两件基础散件装备到同一棋子身上自动熔铸成金铲铲神级大件！");
         sv.addView(tvDetailFeed);
         detailCardLayout.addView(sv);
@@ -225,20 +220,47 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         }
         tvSynergies.setText(synSb.toString());
 
-        // 刷新商店卡牌
-        shopRowLayout.removeAllViews();
+        // 刷新金铲铲图文卡牌商店
+        shopCardContainer.removeAllViews();
         for (int i = 0; i < engine.shopCards.size(); i++) {
             final int cardIdx = i;
             ChessChampion card = engine.shopCards.get(i);
-            Button btnCard = new Button(this);
+
+            LinearLayout cardBox = new LinearLayout(this);
+            cardBox.setOrientation(LinearLayout.VERTICAL);
+            cardBox.setGravity(Gravity.CENTER);
+            cardBox.setPadding(6, 4, 6, 4);
+
+            LinearLayout.LayoutParams boxLp = new LinearLayout.LayoutParams(95, 115);
+            boxLp.rightMargin = 6;
+            cardBox.setLayoutParams(boxLp);
+
             if (card != null) {
-                btnCard.setText(card.cost + "金 [" + card.origin + "·" + card.roleClass + "] " + card.name);
-                btnCard.setTextSize(10);
-                btnCard.setBackgroundColor(getCostColor(card.cost));
-                btnCard.setTextColor(Color.WHITE);
-                btnCard.setOnClickListener(v -> {
+                cardBox.setBackgroundColor(getCostColor(card.cost));
+
+                ImageView ivCardThumb = new ImageView(this);
+                LinearLayout.LayoutParams ivLp = new LinearLayout.LayoutParams(65, 75);
+                ivCardThumb.setLayoutParams(ivLp);
+                ivCardThumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
+
+                String key = card.id.replace("c_", "");
+                Bitmap thumb = cardBitmaps.get(key);
+                if (thumb != null) {
+                    ivCardThumb.setImageBitmap(thumb);
+                }
+
+                TextView tvName = new TextView(this);
+                tvName.setText(card.name + " (" + card.cost + "金)");
+                tvName.setTextColor(Color.WHITE);
+                tvName.setTextSize(9);
+                tvName.setGravity(Gravity.CENTER);
+
+                cardBox.addView(ivCardThumb);
+                cardBox.addView(tvName);
+
+                cardBox.setOnClickListener(v -> {
                     if (engine.buyChampion(cardIdx)) {
-                        feedLog("【招募英雄】花费 " + card.cost + " 金币招募【" + card.name + "】入座备战席！");
+                        feedLog("【招募英雄】花费 " + card.cost + " 金币招募【" + card.name + "】！");
                         showChampionDetailCard(card);
                         refreshAllViews();
                     } else {
@@ -246,15 +268,17 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
                     }
                 });
             } else {
-                btnCard.setText("已售罄");
-                btnCard.setTextSize(10);
-                btnCard.setEnabled(false);
-                btnCard.setBackgroundColor(Color.parseColor("#2C3E50"));
+                cardBox.setBackgroundColor(Color.parseColor("#1C2430"));
+                TextView tvSold = new TextView(this);
+                tvSold.setText("已售罄");
+                tvSold.setTextColor(Color.GRAY);
+                tvSold.setTextSize(10);
+                cardBox.addView(tvSold);
             }
-            shopRowLayout.addView(btnCard);
+            shopCardContainer.addView(cardBox);
         }
 
-        // 刷新装备库
+        // 刷新金铲铲装备库 (图标)
         itemBenchLayout.removeAllViews();
         for (int i = 0; i < engine.itemBench.size(); i++) {
             final int itIdx = i;
@@ -263,11 +287,12 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
             LinearLayout itemCol = new LinearLayout(this);
             itemCol.setOrientation(LinearLayout.VERTICAL);
             itemCol.setGravity(Gravity.CENTER);
-            itemCol.setPadding(4, 2, 4, 2);
+            itemCol.setPadding(6, 2, 6, 2);
 
             ImageView ivItem = new ImageView(this);
-            LinearLayout.LayoutParams ivItemLp = new LinearLayout.LayoutParams(40, 40);
+            LinearLayout.LayoutParams ivItemLp = new LinearLayout.LayoutParams(42, 42);
             ivItem.setLayoutParams(ivItemLp);
+            ivItem.setScaleType(ImageView.ScaleType.FIT_CENTER);
 
             String itemKey = mapItemToKey(item.id);
             Bitmap bmp = itemBitmaps.get(itemKey);
@@ -391,7 +416,6 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
     }
 
     private void showChampionDetailCard(ChessChampion c) {
-        // 展示金铲铲英雄高精卡牌立绘！
         String key = c.id.replace("c_", "");
         Bitmap portrait = cardBitmaps.get(key);
         if (portrait != null) {
