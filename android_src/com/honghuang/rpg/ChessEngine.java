@@ -3,11 +3,11 @@ package com.honghuang.rpg;
 import java.util.*;
 
 public class ChessEngine {
-    public int gold = 15; // 初始灵石
+    public int gold = 15; // 初始灵石金币
     public int level = 3; // 初始人口 (等级)
     public int exp = 0;   // 人口经验
     public int round = 1; // 当前回合
-    public int playerHealth = 100; // 玩家小小道尊血量
+    public int playerHealth = 100; // 玩家小小道尊气血
 
     // 备战席 (最多 8 格)
     public ChessChampion[] bench = new ChessChampion[8];
@@ -21,16 +21,16 @@ public class ChessEngine {
     // 商店卡槽 (5 张)
     public List<ChessChampion> shopCards = new ArrayList<>(5);
 
-    // 装备库备选池 (最多 6 件)
-    public List<ChessEquipment> equipmentInventory = new ArrayList<>(6);
+    // 金铲铲装备库 (最多 8 件散件或大件)
+    public List<TFTItem> itemBench = new ArrayList<>(8);
 
     private final List<ChessChampion> pool = ChessChampion.getAllPoolChampions();
     private final Random rng = new Random();
 
     public ChessEngine() {
-        // 初始附赠 2 件基础法宝散件
-        equipmentInventory.add(new ChessEquipment(ChessEquipment.EquipType.SHEN_TIAN_JIAN));
-        equipmentInventory.add(new ChessEquipment(ChessEquipment.EquipType.XUAN_WU_JIA));
+        // 初始野怪回合掉落 2 件经典散件：暴风大剑 + 反曲弓
+        itemBench.add(new TFTItem(TFTItem.ItemID.BF_SWORD));
+        itemBench.add(new TFTItem(TFTItem.ItemID.RECURVE_BOW));
         refreshShop(true);
         setupDefaultEnemyBoard();
     }
@@ -76,9 +76,6 @@ public class ChessEngine {
         return false;
     }
 
-    /**
-     * 刷新卡池商店
-     */
     public boolean refreshShop(boolean free) {
         if (!free) {
             if (gold < 2) return false;
@@ -116,19 +113,15 @@ public class ChessEngine {
             if (r < 0.35) return 2;
             if (r < 0.65) return 3;
             if (r < 0.90) return 4;
-            return 5; // 5费大能
+            return 5;
         }
     }
 
-    /**
-     * 购买棋子并自动触发“3合1升星”
-     */
     public boolean buyChampion(int shopIndex) {
         if (shopIndex < 0 || shopIndex >= shopCards.size()) return false;
         ChessChampion card = shopCards.get(shopIndex);
         if (card == null || gold < card.cost) return false;
 
-        // 寻找备战席空位
         int emptyIdx = -1;
         for (int i = 0; i < bench.length; i++) {
             if (bench[i] == null) {
@@ -136,38 +129,32 @@ public class ChessEngine {
                 break;
             }
         }
-        if (emptyIdx == -1) return false; // 备战席已满
+        if (emptyIdx == -1) return false;
 
         gold -= card.cost;
         bench[emptyIdx] = card;
-        shopCards.set(shopIndex, null); // 扣除该牌
+        shopCards.set(shopIndex, null);
 
-        // 自动三连升星检查！
         triggerTripleStarUpgrade(card.name);
         return true;
     }
 
-    /**
-     * 3连自动合成 2星 / 3星 机制 (金铲铲精髓)
-     */
     public void triggerTripleStarUpgrade(String champName) {
-        // 1. 检查是否有 3 个 1 星同名棋子
         List<int[]> oneStarLocs = new ArrayList<>();
         for (int i = 0; i < bench.length; i++) {
             if (bench[i] != null && bench[i].name.equals(champName) && bench[i].star == 1) {
-                oneStarLocs.add(new int[] { 0, i }); // 0 代表 bench
+                oneStarLocs.add(new int[] { 0, i });
             }
         }
         for (int r = 0; r < 4; r++) {
             for (int c = 0; c < 8; c++) {
                 if (board[r][c] != null && board[r][c].name.equals(champName) && board[r][c].star == 1) {
-                    oneStarLocs.add(new int[] { 1, r, c }); // 1 代表 board
+                    oneStarLocs.add(new int[] { 1, r, c });
                 }
             }
         }
 
         if (oneStarLocs.size() >= 3) {
-            // 合成 2 星！保留第一个位置，销毁后两个
             int[] keep = oneStarLocs.get(0);
             ChessChampion target = (keep[0] == 0) ? bench[keep[1]] : board[keep[1]][keep[2]];
             target.star = 2;
@@ -178,7 +165,6 @@ public class ChessEngine {
                 else board[loc[1]][loc[2]] = null;
             }
 
-            // 递归检查是否能再合成 3 星
             checkTwoStarTripleUpgrade(champName);
         }
     }
@@ -201,7 +187,7 @@ public class ChessEngine {
         if (twoStarLocs.size() >= 3) {
             int[] keep = twoStarLocs.get(0);
             ChessChampion target = (keep[0] == 0) ? bench[keep[1]] : board[keep[1]][keep[2]];
-            target.star = 3; // 升至金闪闪 3 星大能！
+            target.star = 3;
 
             for (int k = 1; k < 3; k++) {
                 int[] loc = twoStarLocs.get(k);
@@ -212,54 +198,20 @@ public class ChessEngine {
     }
 
     /**
-     * 将装备穿戴到棋子上 (支持法宝合成)
+     * 将装备穿戴到棋子上 (触发金铲铲散件两两合成大件)
      */
-    public boolean equipItemToChampion(int equipInvIndex, ChessChampion target) {
-        if (equipInvIndex < 0 || equipInvIndex >= equipmentInventory.size() || target == null) return false;
-        ChessEquipment item = equipmentInventory.get(equipInvIndex);
+    public boolean equipItemToChampion(int itemBenchIndex, ChessChampion target) {
+        if (itemBenchIndex < 0 || itemBenchIndex >= itemBench.size() || target == null) return false;
+        TFTItem item = itemBench.get(itemBenchIndex);
         if (item == null) return false;
 
-        // 如果棋子上已经有1件基础散件，并且新装也是基础散件 -> 自动融合成神品法宝！
-        if (target.equipments.size() == 1 && !target.equipments.get(0).type.isCombined && !item.type.isCombined) {
-            ChessEquipment first = target.equipments.get(0);
-            ChessEquipment combined = tryCombineEquipment(first.type, item.type);
-            if (combined != null) {
-                target.equipments.clear();
-                target.equipments.add(combined);
-                equipmentInventory.remove(equipInvIndex);
-                return true;
-            }
-        }
-
-        if (target.addEquipment(item)) {
-            equipmentInventory.remove(equipInvIndex);
+        if (target.equipItem(item)) {
+            itemBench.remove(itemBenchIndex);
             return true;
         }
         return false;
     }
 
-    private ChessEquipment tryCombineEquipment(ChessEquipment.EquipType a, ChessEquipment.EquipType b) {
-        if (a == ChessEquipment.EquipType.SHEN_TIAN_JIAN && b == ChessEquipment.EquipType.SHEN_TIAN_JIAN) {
-            return new ChessEquipment(ChessEquipment.EquipType.ZHU_XIAN_JIAN);
-        }
-        if ((a == ChessEquipment.EquipType.SHEN_TIAN_JIAN && b == ChessEquipment.EquipType.XUAN_WU_JIA) ||
-            (b == ChessEquipment.EquipType.SHEN_TIAN_JIAN && a == ChessEquipment.EquipType.XUAN_WU_JIA)) {
-            return new ChessEquipment(ChessEquipment.EquipType.FAN_TIAN_YIN);
-        }
-        if ((a == ChessEquipment.EquipType.TAI_YI_FU && b == ChessEquipment.EquipType.SHEN_TIAN_JIAN) ||
-            (b == ChessEquipment.EquipType.TAI_YI_FU && a == ChessEquipment.EquipType.SHEN_TIAN_JIAN)) {
-            return new ChessEquipment(ChessEquipment.EquipType.DING_HAI_ZHU);
-        }
-        if ((a == ChessEquipment.EquipType.XUAN_WU_JIA && b == ChessEquipment.EquipType.HOU_TU_JING) ||
-            (b == ChessEquipment.EquipType.XUAN_WU_JIA && a == ChessEquipment.EquipType.HOU_TU_JING)) {
-            return new ChessEquipment(ChessEquipment.EquipType.TAI_JI_TU);
-        }
-        return null;
-    }
-
-    /**
-     * 上阵棋子数量统计
-     */
     public int getBoardCount() {
         int count = 0;
         for (int r = 0; r < 4; r++) {
@@ -270,9 +222,6 @@ public class ChessEngine {
         return count;
     }
 
-    /**
-     * 上阵/下阵棋子
-     */
     public boolean deployChampion(int benchIdx, int boardR, int boardC) {
         if (benchIdx < 0 || benchIdx >= bench.length) return false;
         if (boardR < 0 || boardR >= 4 || boardC < 0 || boardC >= 8) return false;
@@ -280,12 +229,10 @@ public class ChessEngine {
         ChessChampion toDeploy = bench[benchIdx];
         if (toDeploy == null) return false;
 
-        // 如果目标格为空且上阵人数已达上限
         if (board[boardR][boardC] == null && getBoardCount() >= level) {
             return false;
         }
 
-        // 交换或上阵
         ChessChampion old = board[boardR][boardC];
         board[boardR][boardC] = toDeploy;
         bench[benchIdx] = old;
@@ -307,9 +254,6 @@ public class ChessEngine {
         return false;
     }
 
-    /**
-     * 计算活跃羁绊
-     */
     public Map<String, Integer> calculateSynergies() {
         Map<String, Integer> counts = new HashMap<>();
         Set<String> uniqueChamps = new HashSet<>();
@@ -327,7 +271,6 @@ public class ChessEngine {
     }
 
     private void setupDefaultEnemyBoard() {
-        // 第一回合 2 个 1 费野怪/低阶对手
         enemyBoard[0][3] = pool.get(0).copy();
         enemyBoard[0][4] = pool.get(1).copy();
     }
@@ -348,11 +291,16 @@ public class ChessEngine {
             enemyBoard[row][col] = enemy;
         }
 
-        // 回合胜率奖品：概率掉落法宝散件
-        if (rng.nextDouble() < 0.40 && equipmentInventory.size() < 6) {
-            ChessEquipment.EquipType[] types = ChessEquipment.EquipType.values();
-            ChessEquipment.EquipType drop = types[rng.nextInt(4)]; // 掉落4种基础件之一
-            equipmentInventory.add(new ChessEquipment(drop));
+        // 野怪/回合战后散件掉落
+        if (rng.nextDouble() < 0.45 && itemBench.size() < 8) {
+            TFTItem.ItemID[] components = new TFTItem.ItemID[] {
+                TFTItem.ItemID.BF_SWORD, TFTItem.ItemID.RECURVE_BOW,
+                TFTItem.ItemID.NEEDLESS_ROD, TFTItem.ItemID.TEAR,
+                TFTItem.ItemID.CHAIN_VEST, TFTItem.ItemID.NEGATRON_CLOAK,
+                TFTItem.ItemID.GIANTS_BELT, TFTItem.ItemID.SPARRING_GLOVES
+            };
+            TFTItem.ItemID drop = components[rng.nextInt(components.length)];
+            itemBench.add(new TFTItem(drop));
         }
     }
 }

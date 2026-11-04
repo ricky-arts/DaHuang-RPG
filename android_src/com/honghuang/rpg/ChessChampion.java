@@ -18,15 +18,15 @@ public class ChessChampion {
     public int star = 1; // 1星 / 2星 / 3星
     public int baseHp;
     public int baseAtk;
-    public int baseArmor;      // 物理抗性 (Armor)
-    public int baseMagicResist;// 法术抗性 (Magic Resist)
-    public double baseAttackSpeed; // 基础攻速 (次/秒，例如 0.65 ~ 0.85)
+    public int baseArmor;      // 物理护甲 (Armor)
+    public int baseMagicResist;// 魔法抗性 (Magic Resist)
+    public double baseAttackSpeed; // 基础攻速 (次/秒)
     public int baseApPercent;  // 法术强度 (初始 100%)
     public int attackRange;    // 攻击距离: 1为近战格, 2~4为远程格
     public String element;     // 金木水火土
 
-    // 装备槽位 (最多 3 件装备)
-    public List<ChessEquipment> equipments = new ArrayList<>(3);
+    // 金铲铲标准 3 件装备槽位
+    public List<TFTItem> items = new ArrayList<>(3);
 
     public ChessChampion(
         String id, String name, int cost, String origin, String roleClass,
@@ -61,8 +61,8 @@ public class ChessChampion {
             this.baseApPercent, this.attackRange, this.element
         );
         c.star = this.star;
-        for (ChessEquipment eq : this.equipments) {
-            c.equipments.add(new ChessEquipment(eq.type));
+        for (TFTItem it : this.items) {
+            c.items.add(new TFTItem(it.id));
         }
         return c;
     }
@@ -70,8 +70,10 @@ public class ChessChampion {
     public int getMaxHp() {
         double starMult = (star == 1) ? 1.0 : (star == 2 ? 1.8 : 3.2);
         int total = (int)(baseHp * starMult);
-        for (ChessEquipment eq : equipments) {
-            total += eq.type.bonusHp;
+        for (TFTItem it : items) {
+            if (it.id == TFTItem.ItemID.GIANTS_BELT) total += 150;
+            if (it.id == TFTItem.ItemID.WARMOG_ARMOR) total += 800;
+            if (it.id == TFTItem.ItemID.SUNFIRE_CAPE) total += 250;
         }
         return total;
     }
@@ -79,59 +81,83 @@ public class ChessChampion {
     public int getAttack() {
         double starMult = (star == 1) ? 1.0 : (star == 2 ? 1.75 : 3.0);
         int total = (int)(baseAtk * starMult);
-        for (ChessEquipment eq : equipments) {
-            total += eq.type.bonusAtk;
+        for (TFTItem it : items) {
+            total += it.id.bonusAtk;
         }
         return total;
     }
 
     public int getArmor() {
         int total = baseArmor * (star == 1 ? 1 : (star == 2 ? 2 : 3));
-        for (ChessEquipment eq : equipments) {
-            total += eq.type.bonusDef;
+        for (TFTItem it : items) {
+            total += it.id.bonusArmor;
         }
         return total;
     }
 
     public int getMagicResist() {
         int total = baseMagicResist * (star == 1 ? 1 : (star == 2 ? 2 : 3));
-        for (ChessEquipment eq : equipments) {
-            total += eq.type.bonusDef / 2;
+        for (TFTItem it : items) {
+            total += it.id.bonusMR;
         }
         return total;
     }
 
     public double getAttackSpeed() {
         double spd = baseAttackSpeed;
-        if ("剑修".equals(roleClass)) spd *= 1.15; // 剑修攻速加成
-        return Math.min(2.5, Math.max(0.4, spd)); // 限制在 0.4 ~ 2.5 次/秒
+        for (TFTItem it : items) {
+            spd *= (1.0 + it.id.bonusAtkSpeed / 100.0);
+        }
+        if ("剑修".equals(roleClass)) spd *= 1.15;
+        return Math.min(2.5, Math.max(0.4, spd));
     }
 
     public int getApPercent() {
         int total = baseApPercent;
-        if ("法尊".equals(roleClass)) total += 35; // 法尊自带法强
-        for (ChessEquipment eq : equipments) {
-            if (eq.type == ChessEquipment.EquipType.TAI_YI_FU) total += 20;
-            if (eq.type == ChessEquipment.EquipType.DING_HAI_ZHU) total += 35;
+        if ("法尊".equals(roleClass)) total += 35;
+        for (TFTItem it : items) {
+            total += it.id.bonusAP;
         }
         return total;
     }
 
-    public boolean canEquip() {
-        return equipments.size() < 3;
+    public int getStartingManaBonus() {
+        int bonus = 0;
+        for (TFTItem it : items) {
+            bonus += it.id.bonusMana;
+        }
+        return bonus;
     }
 
-    public boolean addEquipment(ChessEquipment eq) {
-        if (canEquip()) {
-            equipments.add(eq);
+    public boolean canEquip() {
+        return items.size() < 3;
+    }
+
+    /**
+     * 装备穿戴与金铲铲散件两两合成大件
+     */
+    public boolean equipItem(TFTItem newItem) {
+        if (newItem == null) return false;
+
+        // 若棋子已有散件，且新装也是散件 -> 自动融合成金铲铲大件！
+        for (int i = 0; i < items.size(); i++) {
+            TFTItem existing = items.get(i);
+            if (!existing.id.isCompleted && !newItem.id.isCompleted) {
+                TFTItem combined = TFTItem.combine(existing, newItem);
+                if (combined != null) {
+                    items.set(i, combined);
+                    return true;
+                }
+            }
+        }
+
+        if (items.size() < 3) {
+            items.add(newItem);
             return true;
         }
         return false;
     }
 
-    /**
-     * 预设洪荒棋子大卡池 (1~5费完整数值)
-     */
     public static List<ChessChampion> getAllPoolChampions() {
         List<ChessChampion> list = new ArrayList<>();
 

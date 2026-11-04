@@ -19,13 +19,13 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
     private int selectedBenchIdx = -1;
     private int selectedBoardR = -1;
     private int selectedBoardC = -1;
-    private int selectedEquipIdx = -1;
+    private int selectedItemIdx = -1;
 
     // 界面控件
     private TextView tvPlayerInfo;
     private TextView tvSynergies;
     private LinearLayout shopRowLayout;
-    private LinearLayout equipRowLayout;
+    private LinearLayout itemBenchLayout;
     private TextView tvDetailFeed;
 
     @Override
@@ -34,7 +34,7 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
 
         engine = new ChessEngine();
 
-        // 横屏左右分栏：左侧 65% 战棋棋盘，右侧 35% 金铲铲运营操作台
+        // 横屏金铲铲竞技场布局：左侧 65% 战棋主棋盘与备战席，右侧 35% 运营操作控制台
         rootContainer = new LinearLayout(this);
         rootContainer.setOrientation(LinearLayout.HORIZONTAL);
         rootContainer.setBackgroundColor(Color.parseColor("#080D14"));
@@ -66,7 +66,7 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
     private void setupControlPanel() {
         controlPanel.removeAllViews();
 
-        // 1. 顶部玩家基础状态 (回合 / 灵石 / 人口 / 血量)
+        // 1. 金铲铲顶部经济与人口状态
         tvPlayerInfo = new TextView(this);
         tvPlayerInfo.setTextSize(13);
         tvPlayerInfo.setTextColor(Color.parseColor("#F1C40F"));
@@ -79,33 +79,33 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         tvSynergies.setPadding(0, 4, 0, 4);
         controlPanel.addView(tvSynergies);
 
-        // 3. 运营操作按钮组 (升人口 D牌 开战)
+        // 3. 运营操作按钮组 (升人口 4金 / 刷新 2金 / 开战)
         LinearLayout opLayout = new LinearLayout(this);
         opLayout.setOrientation(LinearLayout.HORIZONTAL);
         opLayout.setGravity(Gravity.CENTER);
 
         Button btnBuyExp = new Button(this);
-        btnBuyExp.setText("【研习道法 4灵石】");
+        btnBuyExp.setText("【研习道法 4金】");
         btnBuyExp.setTextSize(10);
         btnBuyExp.setOnClickListener(v -> {
             if (engine.buyExp()) {
-                feedLog("【升级人口】研习道法获得 4 点经验！当前人口等级：" + engine.level);
+                feedLog("【升人口】花费 4 金币购买 4 点经验！当前等级：" + engine.level + "级");
                 refreshAllViews();
             } else {
-                Toast.makeText(this, "灵石不足 4 块或已达九阶人口！", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "金币不足 4 块或已达九阶满级人口！", Toast.LENGTH_SHORT).show();
             }
         });
         opLayout.addView(btnBuyExp);
 
         Button btnReroll = new Button(this);
-        btnReroll.setText("【引动天机 2灵石】");
+        btnReroll.setText("【刷新卡池 2金】");
         btnReroll.setTextSize(10);
         btnReroll.setOnClickListener(v -> {
             if (engine.refreshShop(false)) {
-                feedLog("【天机刷新】消耗 2 灵石洗练天机卡池！");
+                feedLog("【D牌刷新】消耗 2 金币洗练当前商店！");
                 refreshAllViews();
             } else {
-                Toast.makeText(this, "灵石不足 2 块无法刷新！", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "金币不足 2 块无法刷新！", Toast.LENGTH_SHORT).show();
             }
         });
         opLayout.addView(btnReroll);
@@ -120,9 +120,9 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
 
         controlPanel.addView(opLayout);
 
-        // 4. 卡池商店横向卡牌区 (5 张牌)
+        // 4. 金铲铲 5 张英雄购买卡槽
         TextView tvShopTitle = new TextView(this);
-        tvShopTitle.setText("【 天机道坊 · 仙魔招募 (点击购买) 】");
+        tvShopTitle.setText("【 天机道坊 · 仙魔卡池 (点击购买) 】");
         tvShopTitle.setTextColor(Color.parseColor("#E67E22"));
         tvShopTitle.setTextSize(11);
         tvShopTitle.setPadding(0, 4, 0, 2);
@@ -132,19 +132,19 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         shopRowLayout.setOrientation(LinearLayout.VERTICAL);
         controlPanel.addView(shopRowLayout);
 
-        // 5. 装备法宝栏 (可穿戴至选中棋子)
-        TextView tvEquipTitle = new TextView(this);
-        tvEquipTitle.setText("【 法宝玉匣 (点击装备赋能给选中棋子) 】");
-        tvEquipTitle.setTextColor(Color.parseColor("#9B59B6"));
-        tvEquipTitle.setTextSize(11);
-        tvEquipTitle.setPadding(0, 4, 0, 2);
-        controlPanel.addView(tvEquipTitle);
+        // 5. 金铲铲装备库 (散件与合成大件)
+        TextView tvItemTitle = new TextView(this);
+        tvItemTitle.setText("【 装备库 (点击装备赋能给选中棋子，双散件自动合成) 】");
+        tvItemTitle.setTextColor(Color.parseColor("#9B59B6"));
+        tvItemTitle.setTextSize(11);
+        tvItemTitle.setPadding(0, 4, 0, 2);
+        controlPanel.addView(tvItemTitle);
 
-        equipRowLayout = new LinearLayout(this);
-        equipRowLayout.setOrientation(LinearLayout.HORIZONTAL);
-        controlPanel.addView(equipRowLayout);
+        itemBenchLayout = new LinearLayout(this);
+        itemBenchLayout.setOrientation(LinearLayout.HORIZONTAL);
+        controlPanel.addView(itemBenchLayout);
 
-        // 6. 详细战报与人物生平
+        // 6. 详细战报与英雄传记
         ScrollView sv = new ScrollView(this);
         LinearLayout.LayoutParams svLp = new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f
@@ -154,14 +154,14 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         tvDetailFeed = new TextView(this);
         tvDetailFeed.setTextColor(Color.parseColor("#BDC3C7"));
         tvDetailFeed.setTextSize(10);
-        tvDetailFeed.setText("欢迎踏入《大荒：洪荒弈道》！\n三张同名棋子自动升星（二星/三星）！两件基础散件装备到同一棋子自动融合成神品至宝！");
+        tvDetailFeed.setText("欢迎踏入《大荒：洪荒弈道》！\n三张同名棋子自动升星（二星/三星）！两件基础散件装备到同一棋子身上自动熔铸成金铲铲神级大件！");
         sv.addView(tvDetailFeed);
         controlPanel.addView(sv);
     }
 
     private void refreshAllViews() {
         int boardCount = engine.getBoardCount();
-        tvPlayerInfo.setText("第 " + engine.round + " 回合 ｜ 道尊气血:" + engine.playerHealth + " ｜ 灵石:" + engine.gold + " ｜ 人口:" + boardCount + "/" + engine.level + " (升级进度:" + engine.exp + "/" + engine.getExpForNextLevel() + ")");
+        tvPlayerInfo.setText("第 " + engine.round + " 回合 ｜ 小小道尊气血:" + engine.playerHealth + " ｜ 金币:" + engine.gold + " ｜ 人口:" + boardCount + "/" + engine.level + " (经验:" + engine.exp + "/" + engine.getExpForNextLevel() + ")");
 
         Map<String, Integer> syn = engine.calculateSynergies();
         StringBuilder synSb = new StringBuilder("【活跃羁绊】：");
@@ -174,22 +174,23 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
         }
         tvSynergies.setText(synSb.toString());
 
+        // 刷新商店卡牌
         shopRowLayout.removeAllViews();
         for (int i = 0; i < engine.shopCards.size(); i++) {
             final int cardIdx = i;
             ChessChampion card = engine.shopCards.get(i);
             Button btnCard = new Button(this);
             if (card != null) {
-                btnCard.setText(card.cost + "灵石 [" + card.origin + "·" + card.roleClass + "] " + card.name);
+                btnCard.setText(card.cost + "金 [" + card.origin + "·" + card.roleClass + "] " + card.name);
                 btnCard.setTextSize(10);
                 btnCard.setBackgroundColor(getCostColor(card.cost));
                 btnCard.setTextColor(Color.WHITE);
                 btnCard.setOnClickListener(v -> {
                     if (engine.buyChampion(cardIdx)) {
-                        feedLog("【招揽道友】花费 " + card.cost + " 灵石请出【" + card.name + "】入座备战席！");
+                        feedLog("【招募英雄】花费 " + card.cost + " 金币招募【" + card.name + "】入座备战席！");
                         refreshAllViews();
                     } else {
-                        Toast.makeText(this, "备战席已满或灵石不足！", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "备战席已满或金币不足！", Toast.LENGTH_SHORT).show();
                     }
                 });
             } else {
@@ -201,21 +202,22 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
             shopRowLayout.addView(btnCard);
         }
 
-        equipRowLayout.removeAllViews();
-        for (int i = 0; i < engine.equipmentInventory.size(); i++) {
-            final int eqIdx = i;
-            ChessEquipment eq = engine.equipmentInventory.get(i);
-            Button btnEq = new Button(this);
-            btnEq.setText(eq.type.name);
-            btnEq.setTextSize(9);
-            btnEq.setBackgroundColor(eqIdx == selectedEquipIdx ? Color.parseColor("#F1C40F") : Color.parseColor("#8E44AD"));
-            btnEq.setTextColor(Color.WHITE);
-            btnEq.setOnClickListener(v -> {
-                selectedEquipIdx = (selectedEquipIdx == eqIdx) ? -1 : eqIdx;
-                feedLog("【选中法宝】" + eq.type.name + " - " + eq.type.description + "\n(点击棋盘上的棋子即可穿戴或融合至尊法宝！)");
+        // 刷新装备库
+        itemBenchLayout.removeAllViews();
+        for (int i = 0; i < engine.itemBench.size(); i++) {
+            final int itIdx = i;
+            TFTItem item = engine.itemBench.get(i);
+            Button btnItem = new Button(this);
+            btnItem.setText(item.id.name);
+            btnItem.setTextSize(9);
+            btnItem.setBackgroundColor(itIdx == selectedItemIdx ? Color.parseColor("#F1C40F") : Color.parseColor(item.id.isCompleted ? "#D35400" : "#2980B9"));
+            btnItem.setTextColor(Color.WHITE);
+            btnItem.setOnClickListener(v -> {
+                selectedItemIdx = (selectedItemIdx == itIdx) ? -1 : itIdx;
+                feedLog("【选中装备】" + item.id.name + " - " + item.id.description + "\n(点击棋盘上的英雄棋子即可穿戴或合成金铲铲大件！)");
                 refreshAllViews();
             });
-            equipRowLayout.addView(btnEq);
+            itemBenchLayout.addView(btnItem);
         }
 
         boardView.selectedBenchIdx = this.selectedBenchIdx;
@@ -237,10 +239,10 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
 
     @Override
     public void onBenchClicked(int idx) {
-        if (selectedEquipIdx >= 0 && engine.bench[idx] != null) {
-            if (engine.equipItemToChampion(selectedEquipIdx, engine.bench[idx])) {
-                feedLog("【祭炼穿戴】成功将法宝赐予【" + engine.bench[idx].name + "】！");
-                selectedEquipIdx = -1;
+        if (selectedItemIdx >= 0 && engine.bench[idx] != null) {
+            if (engine.equipItemToChampion(selectedItemIdx, engine.bench[idx])) {
+                feedLog("【穿戴成功】成功将装备给予【" + engine.bench[idx].name + "】！");
+                selectedItemIdx = -1;
                 refreshAllViews();
                 return;
             }
@@ -269,10 +271,10 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
             return;
         }
 
-        if (selectedEquipIdx >= 0 && engine.board[r][c] != null) {
-            if (engine.equipItemToChampion(selectedEquipIdx, engine.board[r][c])) {
-                feedLog("【祭炼穿戴】成功将法宝赐予【" + engine.board[r][c].name + "】！");
-                selectedEquipIdx = -1;
+        if (selectedItemIdx >= 0 && engine.board[r][c] != null) {
+            if (engine.equipItemToChampion(selectedItemIdx, engine.board[r][c])) {
+                feedLog("【穿戴成功】成功将装备给予【" + engine.board[r][c].name + "】！");
+                selectedItemIdx = -1;
                 refreshAllViews();
                 return;
             }
@@ -280,7 +282,7 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
 
         if (selectedBenchIdx >= 0) {
             if (engine.deployChampion(selectedBenchIdx, r, c)) {
-                feedLog("【登坛布阵】棋子入阵战棋格 (" + r + "," + c + ")！");
+                feedLog("【登坛布阵】英雄入阵战棋格 (" + r + "," + c + ")！");
                 selectedBenchIdx = -1;
             } else {
                 Toast.makeText(this, "上阵人口已达当前等级上限！请先研习道法提升人口！", Toast.LENGTH_SHORT).show();
@@ -304,30 +306,27 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
     private void showChampionLore(ChessChampion c) {
         StringBuilder sb = new StringBuilder();
         sb.append("★【").append(c.name).append("】").append(c.star).append("星 (").append(c.origin).append("·").append(c.roleClass).append(")\n")
-          .append("属性：气血 ").append(c.getMaxHp()).append(" ｜ 攻伐 ").append(c.getAttack())
+          .append("属性：气血 ").append(c.getMaxHp()).append(" ｜ 攻击 ").append(c.getAttack())
           .append(" ｜ 护甲 ").append(c.getArmor()).append(" ｜ 魔抗 ").append(c.getMagicResist())
           .append("\n攻速 ").append(String.format("%.2f", c.getAttackSpeed())).append("次/秒 ｜ 法强 ").append(c.getApPercent()).append("% ｜ 射程 ").append(c.attackRange).append("格\n")
           .append("大招神通：").append(c.skillName).append("\n效果：").append(c.skillDesc).append("\n")
           .append("背景生平：").append(c.background);
-        if (!c.equipments.isEmpty()) {
-            sb.append("\n已佩戴法宝：");
-            for (ChessEquipment eq : c.equipments) {
-                sb.append("[").append(eq.type.name).append("] ");
+        if (!c.items.isEmpty()) {
+            sb.append("\n已装备物品：");
+            for (TFTItem it : c.items) {
+                sb.append("[").append(it.id.name).append("] ");
             }
         }
         feedLog(sb.toString());
     }
 
-    /**
-     * 触发实时自走棋战斗模拟 (平滑位移走砍、粒子特效与满蓝大招)
-     */
     private void executeCombatRound() {
         if (engine.getBoardCount() == 0) {
-            Toast.makeText(this, "棋盘上尚未布置任何棋子！请先从备战席上阵棋子！", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "棋盘上尚未布置任何英雄！请先从备战席上阵英雄！", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        feedLog("【⚔️ 全场开战】棋子开启实时走位寻敌，攻速平滑普攻回蓝，满蓝自动释放大招！");
+        feedLog("【⚔️ 全场开战】英雄面向目标索敌走砍，双抗真实减伤，满蓝自动引动大招！");
         boardView.startLiveBattle();
     }
 
@@ -335,15 +334,15 @@ public class MainActivity extends Activity implements ChessBoardView.OnTileClick
     public void onCombatFinished(boolean isVictory) {
         runOnUiThread(() -> {
             if (isVictory) {
-                feedLog("【★ 回合大捷 ★】我方仙魔各显神通，万剑与雷霆倾泻，大获全胜！获得回合胜利灵石加成！");
+                feedLog("【★ 回合大捷 ★】我方阵线告捷，万剑与雷霆倾泻，大获全胜！获得回合胜利金币奖励！");
             } else {
                 int damage = Math.max(6, 12 - engine.getBoardCount() * 2);
                 engine.playerHealth = Math.max(0, engine.playerHealth - damage);
-                feedLog("【回合失利】敌方大阵煞气滔天，我方道尊受到 " + damage + " 点神魂真伤！剩余血量：" + engine.playerHealth);
+                feedLog("【回合失利】敌方阵线撕裂我方防线，小小道尊受到 " + damage + " 点真伤！剩余血量：" + engine.playerHealth);
             }
 
             if (engine.playerHealth <= 0) {
-                Toast.makeText(this, "道尊气血竭尽，重聚洪荒灵池！", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "小小道尊血量竭尽，重整旗鼓重新开局！", Toast.LENGTH_LONG).show();
                 engine.playerHealth = 100;
             }
 
